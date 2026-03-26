@@ -1,6 +1,6 @@
 {
   "name": "polygrapher",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Zero-config CLI that generates instant, interactive codebase maps",
   "type": "module",
   "bin": {
@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
-  "keywords": [ 
+  "keywords": [
     "codebase",
     "graph",
     "architecture",
