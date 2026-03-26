@@ -356,5 +356,232 @@ describe('E2E Pipeline', () => {
         });
       }).toThrow();
     });
+
+    it('Epic 12.5: mixed Go+NextJS repo detects both languages and cross-language edges', () => {
+      const projectPath = path.resolve('test-fixtures/mixed/go-nextjs');
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+
+      const json = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8')
+      );
+
+      // Both languages detected
+      expect(json.meta.languages).toContain('go');
+      expect(json.meta.languages).toContain('typescript');
+
+      // Go handler node exists
+      const goHandler = json.nodes.find((n: any) => n.name === 'handleBooking');
+      expect(goHandler).toBeDefined();
+
+      // TS function node exists
+      const tsFunc = json.nodes.find((n: any) => n.name === 'callBookingApi');
+      expect(tsFunc).toBeDefined();
+
+      // Cross-language edge: TS fetch('/api/booking') -> Go handleBooking handler
+      const restEdge = json.edges.find(
+        (e: any) => e.type === 'calls' && e.protocol === 'REST' && e.metadata?.path === '/api/booking'
+      );
+      expect(restEdge).toBeDefined();
+      // Edge target should be resolved to the Go handler node (not the raw URL)
+      expect(restEdge.target).toBe(goHandler.id);
+
+      cleanupOutput(projectPath);
+    });
+  });
+
+    it('Epic 13: Dart bloc-app produces correct node types', () => {
+      const projectPath = path.resolve('test-fixtures/dart/bloc-app');
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+
+      const json = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8')
+      );
+
+      expect(json.meta.languages).toContain('dart');
+
+      // BLoC nodes
+      const blocNodes = json.nodes.filter((n: any) => n.type === 'bloc');
+      expect(blocNodes.length).toBeGreaterThanOrEqual(1);
+
+      // Service nodes (Repository, UseCase, DataSource)
+      const serviceNodes = json.nodes.filter((n: any) => n.type === 'service');
+      expect(serviceNodes.length).toBeGreaterThanOrEqual(1);
+
+      // Component nodes (Widgets)
+      const componentNodes = json.nodes.filter((n: any) => n.type === 'component');
+      expect(componentNodes.length).toBeGreaterThanOrEqual(1);
+
+      // Dio REST call edges
+      const restEdges = json.edges.filter((e: any) => e.protocol === 'REST');
+      expect(restEdges.length).toBeGreaterThanOrEqual(1);
+
+      cleanupOutput(projectPath);
+    });
+
+    it('Epic 13: Dart riverpod-app extracts providers and routes', () => {
+      const projectPath = path.resolve('test-fixtures/dart/riverpod-app');
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+
+      const json = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8')
+      );
+
+      expect(json.meta.languages).toContain('dart');
+
+      // Riverpod provider nodes (service type)
+      const serviceNodes = json.nodes.filter((n: any) => n.type === 'service');
+      expect(serviceNodes.length).toBeGreaterThanOrEqual(2);
+
+      // GoRouter route nodes
+      const routeNodes = json.nodes.filter((n: any) => n.type === 'route');
+      expect(routeNodes.length).toBeGreaterThanOrEqual(2);
+
+      // routes-to edges
+      const routeEdges = json.edges.filter((e: any) => e.type === 'routes-to');
+      expect(routeEdges.length).toBeGreaterThanOrEqual(2);
+
+      cleanupOutput(projectPath);
+    });
+
+    it('Epic 13: Dart pure-dart extracts functions and services (no widgets)', () => {
+      const projectPath = path.resolve('test-fixtures/dart/pure-dart');
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+
+      const json = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8')
+      );
+
+      expect(json.meta.languages).toContain('dart');
+
+      // Should have function and service nodes
+      const functionNodes = json.nodes.filter((n: any) => n.type === 'function');
+      expect(functionNodes.length).toBeGreaterThanOrEqual(1);
+
+      // No widget/component nodes (no Flutter dependency)
+      const componentNodes = json.nodes.filter((n: any) => n.type === 'component');
+      expect(componentNodes).toHaveLength(0);
+
+      cleanupOutput(projectPath);
+    });
+
+    it('Epic 13: triple-language monorepo (Go+TS+Dart) with cross-language edges', () => {
+      const projectPath = path.resolve('test-fixtures/mixed/go-nextjs-flutter');
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+
+      const json = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8')
+      );
+
+      // All three languages detected
+      expect(json.meta.languages).toContain('go');
+      expect(json.meta.languages).toContain('typescript');
+      expect(json.meta.languages).toContain('dart');
+
+      // Cross-language edges: Dart → Go
+      const crossLangEdges = json.edges.filter(
+        (e: any) => e.type === 'calls' && e.protocol === 'REST' && e.matchConfidence === 'exact'
+      );
+      expect(crossLangEdges.length).toBeGreaterThanOrEqual(2);
+
+      // Edge validity: all edge sources and targets must reference existing node IDs
+      const nodeIds = new Set(json.nodes.map((n: any) => n.id));
+      for (const edge of json.edges) {
+        expect(nodeIds.has(edge.source)).toBe(true);
+        expect(nodeIds.has(edge.target)).toBe(true);
+      }
+
+      cleanupOutput(projectPath);
+    });
+
+    it('Epic 13: Dart bloc-app edge validity (sources valid, non-REST targets valid)', () => {
+      const projectPath = path.resolve('test-fixtures/dart/bloc-app');
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+
+      const json = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8')
+      );
+
+      const nodeIds = new Set(json.nodes.map((n: any) => n.id));
+
+      // All edge sources must reference real nodes
+      for (const edge of json.edges) {
+        expect(nodeIds.has(edge.source)).toBe(true);
+      }
+
+      // Non-REST edge targets must reference real nodes
+      const nonRestEdges = json.edges.filter((e: any) => e.protocol !== 'REST');
+      for (const edge of nonRestEdges) {
+        expect(nodeIds.has(edge.target)).toBe(true);
+      }
+
+      // REST edges without cross-language route matches have unresolved targets (expected)
+      const restEdges = json.edges.filter((e: any) => e.protocol === 'REST');
+      expect(restEdges.length).toBeGreaterThan(0);
+
+      cleanupOutput(projectPath);
+    });
+
+    it('Epic 13: Dart output is deterministic', () => {
+      const projectPath = path.resolve('test-fixtures/dart/bloc-app');
+
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+      const json1 = fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8');
+      cleanupOutput(projectPath);
+
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+      const json2 = fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8');
+
+      const obj1 = JSON.parse(json1);
+      const obj2 = JSON.parse(json2);
+      obj1.meta.generatedAt = '';
+      obj2.meta.generatedAt = '';
+
+      expect(obj1).toEqual(obj2);
+
+      cleanupOutput(projectPath);
+    });
+
+  // ─── Item 7: Deterministic output ─────────────────────────────────
+  describe('Deterministic output', () => {
+    it('produces identical JSON on two consecutive runs', () => {
+      const projectPath = path.join(FIXTURES, 'gin-project');
+
+      // Run 1
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+      const json1 = fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8');
+
+      // Run 2
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+      const json2 = fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8');
+
+      // Parse and compare (exclude generatedAt timestamp)
+      const obj1 = JSON.parse(json1);
+      const obj2 = JSON.parse(json2);
+      obj1.meta.generatedAt = '';
+      obj2.meta.generatedAt = '';
+
+      expect(obj1).toEqual(obj2);
+
+      cleanupOutput(projectPath);
+    });
+
+    it('TS project produces identical JSON on two runs', () => {
+      const projectPath = path.resolve('test-fixtures/ts/nextjs-app');
+
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+      const json1 = fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8');
+
+      execSync(`${CLI} --export-only ${projectPath}`, { timeout: 15000 });
+      const json2 = fs.readFileSync(path.join(projectPath, 'polygrapher', 'system-map.json'), 'utf-8');
+
+      const obj1 = JSON.parse(json1);
+      const obj2 = JSON.parse(json2);
+      obj1.meta.generatedAt = '';
+      obj2.meta.generatedAt = '';
+
+      expect(obj1).toEqual(obj2);
+
+      cleanupOutput(projectPath);
+    });
   });
 });

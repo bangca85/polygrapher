@@ -1,0 +1,12 @@
+name: pure_dart_lib
+description: A pure Dart library without Flutter
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  http: ^1.1.0
+
+dev_dependencies:
+  test: ^1.24.0

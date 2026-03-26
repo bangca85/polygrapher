@@ -1,0 +1,127 @@
+{
+  "meta": {
+    "repo": "nextjs-pages",
+    "languages": [
+      "typescript"
+    ],
+    "generatedAt": "2026-03-26T05:28:53.407Z",
+    "polygrapher": "0.2.0"
+  },
+  "nodes": [
+    {
+      "id": "dc4a79e56a7e",
+      "name": "BookingForm",
+      "type": "component",
+      "language": "typescript",
+      "file": "components/BookingForm.tsx",
+      "line": 4,
+      "signature": "const BookingForm = () =>",
+      "repo": "nextjs-pages"
+    },
+    {
+      "id": "05053407e0c3",
+      "name": "handleSubmit",
+      "type": "function",
+      "language": "typescript",
+      "file": "components/BookingForm.tsx",
+      "line": 5,
+      "signature": "const handleSubmit = () =>",
+      "repo": "nextjs-pages"
+    },
+    {
+      "id": "2b0e547ffb19",
+      "name": "helperFunc",
+      "type": "function",
+      "language": "typescript",
+      "file": "lib/helper.ts",
+      "line": 1,
+      "signature": "function helperFunc()",
+      "repo": "nextjs-pages"
+    },
+    {
+      "id": "6e8b8dfc9264",
+      "name": "handler",
+      "type": "handler",
+      "language": "typescript",
+      "file": "pages/api/booking.ts",
+      "line": 3,
+      "signature": "function handler(req: NextApiRequest, res: NextApiResponse)",
+      "repo": "nextjs-pages"
+    },
+    {
+      "id": "aba5e473e793",
+      "name": "getUserById",
+      "type": "handler",
+      "language": "typescript",
+      "file": "pages/api/users/[id].ts",
+      "line": 3,
+      "signature": "function getUserById(req: NextApiRequest, res: NextApiResponse)",
+      "repo": "nextjs-pages"
+    },
+    {
+      "id": "5fec60cf217e",
+      "name": "route-setup",
+      "type": "function",
+      "language": "typescript",
+      "file": "pages/api/booking.ts",
+      "line": 0,
+      "signature": "",
+      "repo": "nextjs-pages"
+    },
+    {
+      "id": "b3e35441b215",
+      "name": "route-setup",
+      "type": "function",
+      "language": "typescript",
+      "file": "pages/api/users/[id].ts",
+      "line": 0,
+      "signature": "",
+      "repo": "nextjs-pages"
+    }
+  ],
+  "edges": [
+    {
+      "source": "dc4a79e56a7e",
+      "target": "2b0e547ffb19",
+      "type": "imports",
+      "protocol": "internal",
+      "metadata": {
+        "sourceFile": "components/BookingForm.tsx"
+      },
+      "callLine": 2
+    },
+    {
+      "source": "05053407e0c3",
+      "target": "6e8b8dfc9264",
+      "type": "calls",
+      "protocol": "REST",
+      "metadata": {
+        "method": "POST",
+        "path": "/api/booking"
+      },
+      "callLine": 6
+    },
+    {
+      "source": "5fec60cf217e",
+      "target": "6e8b8dfc9264",
+      "type": "routes-to",
+      "protocol": "REST",
+      "metadata": {
+        "method": "ANY",
+        "path": "/api/booking"
+      },
+      "callLine": 1
+    },
+    {
+      "source": "b3e35441b215",
+      "target": "aba5e473e793",
+      "type": "routes-to",
+      "protocol": "REST",
+      "metadata": {
+        "method": "ANY",
+        "path": "/api/users/:id"
+      },
+      "callLine": 1
+    }
+  ]
+}

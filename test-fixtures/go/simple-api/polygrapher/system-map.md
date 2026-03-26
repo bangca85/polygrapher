@@ -1,8 +1,10 @@
 # System Map: simple-api
 
-Generated: 2026-03-26T02:25:09.363Z
+Generated: 2026-03-26T11:20:49.317Z
 Languages: go
 Nodes: 4 | Edges: 3
+Branch: main
+Commit: `6fd8a9e` — "init project with go extract"
 
 ---
 
@@ -17,9 +19,6 @@ Nodes: 4 | Edges: 3
 |--------|-------|
 | Functions | 2 |
 | HTTP Handlers | 2 |
-| gRPC Endpoints | 0 |
-| Workers | 0 |
-| Structs | 0 |
 | REST Routes | 2 |
 | Call Relationships | 1 |
 

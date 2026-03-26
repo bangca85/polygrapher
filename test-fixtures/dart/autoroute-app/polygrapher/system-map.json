@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "repo": "autoroute-app",
+    "languages": [
+      "dart"
+    ],
+    "generatedAt": "2026-03-26T08:56:28.723Z",
+    "polygrapher": "0.3.0"
+  },
+  "nodes": [
+    {
+      "id": "8654e3e5031c",
+      "name": "BookingPage",
+      "type": "component",
+      "language": "dart",
+      "file": "lib/ui/booking_page.dart",
+      "line": 2,
+      "signature": "class BookingPage extends StatelessWidget",
+      "repo": "autoroute-app"
+    },
+    {
+      "id": "68d95d2685b8",
+      "name": "BookingPage.build",
+      "type": "function",
+      "language": "dart",
+      "file": "lib/ui/booking_page.dart",
+      "line": 3,
+      "signature": "Widget build(BuildContext context)",
+      "repo": "autoroute-app"
+    },
+    {
+      "id": "d88b806d4575",
+      "name": "ProfilePage",
+      "type": "component",
+      "language": "dart",
+      "file": "lib/ui/booking_page.dart",
+      "line": 9,
+      "signature": "class ProfilePage extends StatelessWidget",
+      "repo": "autoroute-app"
+    },
+    {
+      "id": "3364fcf70b48",
+      "name": "ProfilePage.build",
+      "type": "function",
+      "language": "dart",
+      "file": "lib/ui/booking_page.dart",
+      "line": 10,
+      "signature": "Widget build(BuildContext context)",
+      "repo": "autoroute-app"
+    },
+    {
+      "id": "b8ecee83399b",
+      "name": "/booking",
+      "type": "route",
+      "language": "dart",
+      "file": "lib/ui/booking_page.dart",
+      "line": 2,
+      "signature": "@RoutePage() BookingPage",
+      "repo": "autoroute-app"
+    },
+    {
+      "id": "d310d48cd804",
+      "name": "/profile",
+      "type": "route",
+      "language": "dart",
+      "file": "lib/ui/booking_page.dart",
+      "line": 9,
+      "signature": "@RoutePage() ProfilePage",
+      "repo": "autoroute-app"
+    }
+  ],
+  "edges": [
+    {
+      "source": "8654e3e5031c",
+      "target": "68d95d2685b8",
+      "type": "calls",
+      "protocol": "internal"
+    },
+    {
+      "source": "d88b806d4575",
+      "target": "3364fcf70b48",
+      "type": "calls",
+      "protocol": "internal"
+    },
+    {
+      "source": "b8ecee83399b",
+      "target": "8654e3e5031c",
+      "type": "routes-to",
+      "protocol": "internal",
+      "metadata": {
+        "path": "/booking",
+        "widget": "BookingPage"
+      }
+    },
+    {
+      "source": "d310d48cd804",
+      "target": "d88b806d4575",
+      "type": "routes-to",
+      "protocol": "internal",
+      "metadata": {
+        "path": "/profile",
+        "widget": "ProfilePage"
+      }
+    }
+  ]
+}

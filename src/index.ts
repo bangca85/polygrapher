@@ -130,10 +130,23 @@ program.action(async (targetPath: string, options: { exportOnly: boolean; port: 
       }
     });
 
+    // Track connections for forced shutdown
+    const connections = new Set<import('node:net').Socket>();
+    server.on('connection', (conn) => {
+      connections.add(conn);
+      conn.on('close', () => connections.delete(conn));
+    });
+
     // Graceful shutdown on Ctrl+C
     const shutdown = () => {
       printInfo('\nShutting down...');
+      // Destroy all active connections immediately (browser keep-alive blocks server.close)
+      for (const conn of connections) {
+        conn.destroy();
+      }
       server.close(() => process.exit(0));
+      // Force exit after 1s if server.close hangs
+      setTimeout(() => process.exit(0), 1000).unref();
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);

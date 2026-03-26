@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 // ─── Types ───────────────────────────────────────────────────────────
 
 export interface TechStackInfo {
-  goVersion?: string;
+  runtimeVersion?: string;
   modulePath?: string;
   dependencies: Array<{
     package: string;
@@ -123,8 +123,8 @@ export function parseGoMod(targetPath: string): TechStackInfo | null {
   if (moduleMatch) info.modulePath = moduleMatch[1].trim();
 
   // Extract Go version
-  const goVersionMatch = content.match(/^go\s+(\S+)$/m);
-  if (goVersionMatch) info.goVersion = goVersionMatch[1].trim();
+  const runtimeVersionMatch = content.match(/^go\s+(\S+)$/m);
+  if (runtimeVersionMatch) info.runtimeVersion = runtimeVersionMatch[1].trim();
 
   // Extract single-line requires: require package version
   const singleRequires = content.matchAll(/^require\s+(\S+)\s+(\S+)\s*$/gm);
@@ -158,6 +158,181 @@ export function parseGoMod(targetPath: string): TechStackInfo | null {
   }
 
   return info;
+}
+
+// ─── NPM Package Category Mapping ────────────────────────────────────
+
+const NPM_PACKAGE_CATEGORIES: Record<string, string> = {
+  // Frameworks
+  'next': 'Framework (Next.js)',
+  'react': 'UI Library (React)',
+  'react-dom': 'UI Library (React DOM)',
+  'vue': 'Framework (Vue)',
+  'nuxt': 'Framework (Nuxt)',
+  'svelte': 'Framework (Svelte)',
+  '@angular/core': 'Framework (Angular)',
+  'express': 'HTTP Framework (Express)',
+  'fastify': 'HTTP Framework (Fastify)',
+  'koa': 'HTTP Framework (Koa)',
+  'hono': 'HTTP Framework (Hono)',
+  'nestjs': 'Framework (NestJS)',
+  '@nestjs/core': 'Framework (NestJS)',
+
+  // State Management
+  'redux': 'State Management (Redux)',
+  '@reduxjs/toolkit': 'State Management (Redux Toolkit)',
+  'zustand': 'State Management (Zustand)',
+  'mobx': 'State Management (MobX)',
+  'recoil': 'State Management (Recoil)',
+  'jotai': 'State Management (Jotai)',
+
+  // Database / ORM
+  'prisma': 'ORM (Prisma)',
+  '@prisma/client': 'ORM (Prisma)',
+  'typeorm': 'ORM (TypeORM)',
+  'sequelize': 'ORM (Sequelize)',
+  'drizzle-orm': 'ORM (Drizzle)',
+  'mongoose': 'Database (MongoDB)',
+  'pg': 'Database (PostgreSQL)',
+  'mysql2': 'Database (MySQL)',
+  'better-sqlite3': 'Database (SQLite)',
+  'ioredis': 'Cache (Redis)',
+  'redis': 'Cache (Redis)',
+
+  // Auth
+  'next-auth': 'Auth (NextAuth)',
+  '@auth/core': 'Auth (Auth.js)',
+  'jsonwebtoken': 'Auth (JWT)',
+  'passport': 'Auth (Passport)',
+  'bcrypt': 'Auth (bcrypt)',
+  'bcryptjs': 'Auth (bcrypt)',
+
+  // API / HTTP
+  'axios': 'HTTP Client (Axios)',
+  'swr': 'Data Fetching (SWR)',
+  '@tanstack/react-query': 'Data Fetching (React Query)',
+  'graphql': 'API (GraphQL)',
+  '@apollo/client': 'API (Apollo GraphQL)',
+  'trpc': 'API (tRPC)',
+  '@trpc/server': 'API (tRPC)',
+
+  // Styling
+  'tailwindcss': 'Styling (Tailwind)',
+  'styled-components': 'Styling (Styled Components)',
+  '@emotion/react': 'Styling (Emotion)',
+  'sass': 'Styling (Sass)',
+  '@mui/material': 'UI Kit (MUI)',
+  'antd': 'UI Kit (Ant Design)',
+  '@chakra-ui/react': 'UI Kit (Chakra)',
+  'shadcn-ui': 'UI Kit (shadcn)',
+
+  // Testing
+  'jest': 'Testing (Jest)',
+  'vitest': 'Testing (Vitest)',
+  '@testing-library/react': 'Testing (React Testing Library)',
+  'cypress': 'Testing (Cypress)',
+  'playwright': 'Testing (Playwright)',
+
+  // Build / Tools
+  'typescript': 'Language (TypeScript)',
+  'vite': 'Build (Vite)',
+  'webpack': 'Build (Webpack)',
+  'turbo': 'Build (Turborepo)',
+  'eslint': 'Lint (ESLint)',
+  'prettier': 'Formatter (Prettier)',
+
+  // Message Queue / Realtime
+  'socket.io': 'Realtime (Socket.IO)',
+  'ws': 'Realtime (WebSocket)',
+  'bullmq': 'Queue (BullMQ)',
+  'amqplib': 'Queue (RabbitMQ)',
+  'kafkajs': 'Queue (Kafka)',
+
+  // Cloud / Storage
+  'aws-sdk': 'Cloud (AWS)',
+  '@aws-sdk/client-s3': 'Cloud (AWS S3)',
+  'firebase': 'Cloud (Firebase)',
+  '@supabase/supabase-js': 'Cloud (Supabase)',
+
+  // Logging / Monitoring
+  'winston': 'Logging (Winston)',
+  'pino': 'Logging (Pino)',
+  '@sentry/nextjs': 'Monitoring (Sentry)',
+  '@sentry/node': 'Monitoring (Sentry)',
+};
+
+function categorizeNpmPackage(pkg: string): string {
+  if (NPM_PACKAGE_CATEGORIES[pkg]) return NPM_PACKAGE_CATEGORIES[pkg];
+  // Partial match for scoped packages
+  for (const [key, category] of Object.entries(NPM_PACKAGE_CATEGORIES)) {
+    if (pkg.startsWith(key)) return category;
+  }
+  return 'Other';
+}
+
+// ─── package.json Parser ─────────────────────────────────────────────
+
+export function parsePackageJson(targetPath: string): TechStackInfo | null {
+  const pkgPath = path.join(targetPath, 'package.json');
+  if (!fs.existsSync(pkgPath)) return null;
+
+  try {
+    const content = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    const info: TechStackInfo = { dependencies: [] };
+
+    // Detect Node/runtime version from engines
+    if (content.engines?.node) {
+      info.runtimeVersion = undefined; // reuse field as generic version
+      info.modulePath = content.name || undefined;
+    } else {
+      info.modulePath = content.name || undefined;
+    }
+
+    // Categorized deps from both dependencies and devDependencies
+    const allDeps: Record<string, string> = {
+      ...(content.dependencies || {}),
+      ...(content.devDependencies || {}),
+    };
+
+    for (const [pkg, version] of Object.entries(allDeps)) {
+      const category = categorizeNpmPackage(pkg);
+      if (category !== 'Other') {
+        info.dependencies.push({
+          package: pkg,
+          version: String(version),
+          category,
+        });
+      }
+    }
+
+    // Include uncategorized production deps (not devDependencies — those are build tools)
+    const prodDeps = content.dependencies || {};
+    for (const [pkg, version] of Object.entries(prodDeps)) {
+      const category = categorizeNpmPackage(pkg);
+      if (category === 'Other') {
+        // Skip type packages and common noise
+        if (pkg.startsWith('@types/') || pkg === 'tslib') continue;
+        info.dependencies.push({
+          package: pkg,
+          version: String(version as string),
+          category: 'Dependency',
+        });
+      }
+    }
+
+    // Sort: frameworks first, then alphabetical
+    info.dependencies.sort((a, b) => {
+      const aIsFramework = a.category.includes('Framework') || a.category.includes('UI Library');
+      const bIsFramework = b.category.includes('Framework') || b.category.includes('UI Library');
+      if (aIsFramework && !bIsFramework) return -1;
+      if (!aIsFramework && bIsFramework) return 1;
+      return a.category.localeCompare(b.category);
+    });
+
+    return info.dependencies.length > 0 ? info : null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Git Context ─────────────────────────────────────────────────────

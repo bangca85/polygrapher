@@ -270,7 +270,149 @@ var Xr=function(e){if(!(this instanceof Xr))return new Xr(e);this.id="Thenable/1
   .type-route { background: #3f2c1f; color: #f0883e; }
   .type-component { background: #3f1f2c; color: #ff7b72; }
   .type-struct { background: #3f3f1f; color: #e3b341; }
+  .type-hook { background: #1f2f3f; color: #79c0ff; }
 
+
+  /* Column help tooltip */
+  .col-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #21262d;
+    color: #484f58;
+    font-size: 9px;
+    font-weight: 700;
+    cursor: help;
+    vertical-align: middle;
+    margin-left: 2px;
+    border: 1px solid #30363d;
+    position: relative;
+  }
+  .col-help:hover {
+    background: #30363d;
+    color: #c9d1d9;
+    border-color: #58a6ff;
+  }
+
+  /* Hotness & Dead Code */
+  .heat-bar {
+    display: inline-block;
+    height: 10px;
+    border-radius: 3px;
+    min-width: 2px;
+  }
+  .dead-badge {
+    font-size: 10px;
+    color: #f85149;
+    background: #3d1f20;
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+  .hotness-indicator {
+    padding: 6px 20px;
+    font-size: 12px;
+    border-bottom: 1px solid #21262d;
+  }
+
+  /* Flow View (Call Flow Trace) */
+  #flowPanel {
+    display: none;
+    width: 400px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    flex-shrink: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #flowPanel.active { display: flex; }
+  .flow-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #30363d;
+  }
+  .flow-header label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .flow-entry-select {
+    width: 100%;
+    padding: 6px 10px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .flow-entry-select:focus { border-color: #58a6ff; }
+  .flow-depth-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #21262d;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .flow-depth-controls input[type="range"] {
+    flex: 1;
+    accent-color: #58a6ff;
+  }
+  .flow-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .flow-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+    white-space: nowrap;
+  }
+  .flow-item:hover { background: #21262d; }
+  .flow-item.active { background: #1f2937; }
+  .flow-connector { color: #484f58; font-family: monospace; white-space: pre; }
+  .flow-name { font-weight: 500; }
+  .flow-circular {
+    font-size: 10px;
+    color: #d29922;
+    background: #2a1f00;
+    padding: 1px 6px;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+  .flow-truncated { color: #484f58; font-style: italic; font-size: 11px; }
+  .flow-footer {
+    padding: 8px 16px;
+    border-top: 1px solid #30363d;
+    font-size: 11px;
+    color: #8b949e;
+    flex-shrink: 0;
+  }
+  .flow-warning {
+    padding: 8px 16px;
+    color: #d29922;
+    background: #2a1f00;
+    font-size: 12px;
+    border-bottom: 1px solid #3d3000;
+  }
+  .flow-empty {
+    padding: 24px 16px;
+    color: #484f58;
+    font-size: 13px;
+    text-align: center;
+  }
 
   /* Path Tracing (Epic 7) */
   .trace-controls {
@@ -563,16 +705,9 @@ var Xr=function(e){if(!(this instanceof Xr))return new Xr(e);this.id="Thenable/1
   <div class="filters" id="filters">
     <button class="filter-btn active" data-type="function" style="--fc:#58a6ff"><span class="dot" style="background:#58a6ff"></span>function</button>
     <button class="filter-btn active" data-type="handler" style="--fc:#bc8cff"><span class="dot" style="background:#bc8cff"></span>handler</button>
-    <button class="filter-btn active" data-type="service" style="--fc:#7ee787"><span class="dot" style="background:#7ee787"></span>service</button>
-    <button class="filter-btn active" data-type="grpc" style="--fc:#56d364"><span class="dot" style="background:#56d364"></span>gRPC</button>
     <button class="filter-btn active" data-type="route" style="--fc:#f0883e"><span class="dot" style="background:#f0883e"></span>route</button>
-    <button class="filter-btn active" data-type="worker" style="--fc:#d2a8ff"><span class="dot" style="background:#d2a8ff"></span>worker</button>
-    <button class="filter-btn active" data-type="component" style="--fc:#ff7b72"><span class="dot" style="background:#ff7b72"></span>component</button>
-    <button class="filter-btn active" data-type="struct" style="--fc:#e3b341"><span class="dot" style="background:#e3b341"></span>struct</button>
   </div>
   <div class="cluster-controls" id="clusterControls" style="display:none">
-    <button id="collapseAllBtn" title="Collapse all clusters">▢ Collapse All</button>
-    <button id="expandAllBtn" title="Expand all clusters">▣ Expand All</button>
     <button id="toggleClusterBtn" class="active" title="Toggle flat/clustered view">⬡ Clustered</button>
   </div>
     <div class="trace-controls" id="traceControls" style="display:none">
@@ -585,11 +720,13 @@ var Xr=function(e){if(!(this instanceof Xr))return new Xr(e);this.id="Thenable/1
     <div class="view-toggle" id="viewToggle">
     <button class="active" data-view="graph">Graph</button>
     <button data-view="list">List</button>
+    <button data-view="flow">Flow</button>
   </div>
   <button class="minimap-toggle active" id="minimapToggle" title="Toggle minimap (M)">⊞ Map</button>
 </div>
 
 <div class="main">
+  <div id="flowPanel"></div>
   <div id="cy"></div>
   <div id="listView"></div>
   <div class="detail-panel hidden" id="detailPanel"></div>
@@ -601,7 +738,7 @@ var Xr=function(e){if(!(this instanceof Xr))return new Xr(e);this.id="Thenable/1
 
 <script>
 const ROOT_PATH = "/Users/bangca/bangca/personal/polygrapher/test-fixtures/go/simple-api";
-const GRAPH_DATA = {"meta":{"repo":"simple-api","languages":["go"],"generatedAt":"2026-03-26T02:25:09.363Z","polygrapher":"0.2.0"},"nodes":[{"id":"c020006828d7","name":"main","type":"function","language":"go","file":"main.go","line":8,"signature":"func main()","repo":"simple-api"},{"id":"88d72caf0705","name":"HandleHealth","type":"handler","language":"go","file":"main.go","line":15,"signature":"func HandleHealth(w http.ResponseWriter, r *http.Request)","repo":"simple-api"},{"id":"25637e9af2c6","name":"HandleBooking","type":"handler","language":"go","file":"main.go","line":20,"signature":"func HandleBooking(w http.ResponseWriter, r *http.Request)","repo":"simple-api"},{"id":"ce2c8bc84537","name":"GetBookings","type":"function","language":"go","file":"main.go","line":26,"signature":"func GetBookings() []string","repo":"simple-api"}],"edges":[{"source":"25637e9af2c6","target":"ce2c8bc84537","type":"calls","protocol":"internal","callLine":21},{"source":"c020006828d7","target":"88d72caf0705","type":"routes-to","protocol":"REST","metadata":{"method":"ANY","path":"/health"},"callLine":9},{"source":"c020006828d7","target":"25637e9af2c6","type":"routes-to","protocol":"REST","metadata":{"method":"ANY","path":"/api/booking"},"callLine":10}]};
+const GRAPH_DATA = {"meta":{"repo":"simple-api","languages":["go"],"generatedAt":"2026-03-26T11:20:49.317Z","polygrapher":"0.3.0"},"nodes":[{"id":"c020006828d7","name":"main","type":"function","language":"go","file":"main.go","line":8,"signature":"func main()","repo":"simple-api"},{"id":"88d72caf0705","name":"HandleHealth","type":"handler","language":"go","file":"main.go","line":15,"signature":"func HandleHealth(w http.ResponseWriter, r *http.Request)","repo":"simple-api"},{"id":"25637e9af2c6","name":"HandleBooking","type":"handler","language":"go","file":"main.go","line":20,"signature":"func HandleBooking(w http.ResponseWriter, r *http.Request)","repo":"simple-api"},{"id":"ce2c8bc84537","name":"GetBookings","type":"function","language":"go","file":"main.go","line":26,"signature":"func GetBookings() []string","repo":"simple-api"}],"edges":[{"source":"25637e9af2c6","target":"ce2c8bc84537","type":"calls","protocol":"internal","callLine":21},{"source":"c020006828d7","target":"88d72caf0705","type":"routes-to","protocol":"REST","metadata":{"method":"ANY","path":"/health"},"callLine":9},{"source":"c020006828d7","target":"25637e9af2c6","type":"routes-to","protocol":"REST","metadata":{"method":"ANY","path":"/api/booking"},"callLine":10}]};
 
 
 const NODE_COLORS = {
@@ -613,6 +750,7 @@ const NODE_COLORS = {
   'component': '#ff7b72',
   'struct': '#e3b341',
   'worker': '#d2a8ff',
+  'hook': '#79c0ff',
 };
 
 // HTML escape to prevent XSS from node names/IDs
@@ -633,7 +771,7 @@ routeEdges.forEach(e => {
   if (!routeNodes.has(routeId)) {
     routeNodes.set(routeId, {
       id: routeId,
-      label: (meta.method || '?') + ' ' + (meta.path || '/?'),
+      label: meta.method ? meta.method + ' ' + (meta.path || '/?') : (meta.path || '/?'),
       type: 'route',
       nodeColor: NODE_COLORS['route'],
     });
@@ -763,7 +901,9 @@ function saveExpandedState() {
   try { sessionStorage.setItem(persistKey, JSON.stringify(Array.from(expandedNodes))); } catch(e) {}
 }
 
-const activeTypes = new Set(['function', 'handler', 'service', 'grpc', 'route', 'component', 'struct', 'worker']);
+// Initialize activeTypes from filter buttons actually rendered (data-driven)
+const activeTypes = new Set();
+document.querySelectorAll('.filter-btn[data-type]').forEach(function(btn) { activeTypes.add(btn.dataset.type); });
 var clusteringEnabled = nodeCount > 50;
 var collapsedClusters = new Set();
 var clusterMap = {}; // nodeId -> clusterId
@@ -841,6 +981,110 @@ function updateVisibilityStates() {
 var nodeElements = elements.filter(function(e) { return !e.data.source; });
 var edgeElements = elements.filter(function(e) { return !!e.data.source; });
 
+// ---- HOTNESS PRE-COMPUTATION ----
+var inCount = {};
+var outCount = {};
+var totalConns = {};
+var isDead = {};
+var maxConns = 1;
+var hotnessP50 = 1;
+var hotnessP90 = 1;
+const ENTRY_TYPES = new Set(['handler', 'route', 'grpc', 'service']);
+
+// File patterns that are framework entry points (not called by code, called by framework)
+function isEntryPointFile(filePath) {
+  if (!filePath) return false;
+  var f = filePath.split('\\').join('/');
+  // Next.js App Router: app/**/page.tsx, layout.tsx, loading.tsx, error.tsx, not-found.tsx
+  if (f.indexOf('/app/') >= 0 || f.indexOf('app/') === 0) {
+    var basename = f.split('/').pop() || '';
+    var pageNames = ['page.tsx','page.ts','page.jsx','page.js','layout.tsx','layout.ts','layout.jsx','layout.js','loading.tsx','loading.ts','error.tsx','error.ts','not-found.tsx','not-found.ts','template.tsx','template.ts','default.tsx','default.ts'];
+    if (pageNames.indexOf(basename) >= 0) return true;
+  }
+  // Next.js Pages Router: pages/**/*.tsx (but not pages/api/)
+  if ((f.indexOf('/pages/') >= 0 || f.indexOf('pages/') === 0) && f.indexOf('/api/') < 0) {
+    return true;
+  }
+  // Flutter: main.dart
+  if (f.endsWith('/main.dart') || f === 'main.dart') return true;
+  return false;
+}
+
+function recomputeConnectionCounts() {
+  for (var k in inCount) delete inCount[k];
+  for (var k in outCount) delete outCount[k];
+  for (var k in totalConns) delete totalConns[k];
+  for (var k in isDead) delete isDead[k];
+  maxConns = 1;
+
+  edgeElements.forEach(function(e) {
+    var src = e.data.source;
+    var tgt = e.data.target;
+    outCount[src] = (outCount[src] || 0) + 1;
+    inCount[tgt] = (inCount[tgt] || 0) + 1;
+  });
+
+  var realNodeTotals = [];
+  GRAPH_DATA.nodes.forEach(function(n) {
+    var total = (inCount[n.id] || 0) + (outCount[n.id] || 0);
+    totalConns[n.id] = total;
+    isDead[n.id] = (inCount[n.id] || 0) === 0 && !ENTRY_TYPES.has(n.type) && n.name !== 'main' && !isEntryPointFile(n.file);
+    if (total > maxConns) maxConns = total;
+    realNodeTotals.push(total);
+  });
+
+  // Compute percentiles
+  realNodeTotals.sort(function(a, b) { return a - b; });
+  if (realNodeTotals.length >= 10) {
+    hotnessP50 = realNodeTotals[Math.floor(realNodeTotals.length * 0.5)] || 1;
+    hotnessP90 = realNodeTotals[Math.floor(realNodeTotals.length * 0.9)] || 1;
+  } else {
+    // Small datasets: fixed thresholds
+    hotnessP50 = 3;
+    hotnessP90 = 6;
+  }
+
+  // Inject hotness data into node elements for Cytoscape styling
+  nodeElements.forEach(function(el) {
+    var id = el.data.id;
+    var total = totalConns[id] || 0;
+    el.data.totalConns = total;
+    el.data.isDead = isDead[id] ? 1 : 0;
+    // Pre-compute node size (Cytoscape mapData needs literal bounds in style, so we compute here)
+    el.data.nodeSize = 20 + Math.round((total / maxConns) * 40); // 20-60px range
+  });
+}
+recomputeConnectionCounts();
+
+function getHotnessTier(nodeId) {
+  var ic = inCount[nodeId] || 0;
+  var total = totalConns[nodeId] || 0;
+  var type = null;
+  var n = GRAPH_DATA.nodes.find(function(nd) { return nd.id === nodeId; });
+  if (n) type = n.type;
+  // Entry points are never dead
+  if (ic === 0 && !ENTRY_TYPES.has(type) && (!n || n.name !== 'main') && (!n || !isEntryPointFile(n.file))) {
+    return { tier: 'dead', label: 'Dead — 0 callers', color: '#f85149', cssClass: 'dead' };
+  }
+  if (total >= hotnessP90) {
+    var allTotals = Object.values(totalConns);
+    var rank = allTotals.filter(function(v) { return v >= total; }).length;
+    var pct = Math.round((rank / allTotals.length) * 100);
+    return { tier: 'hot', label: 'Hot — ' + total + ' connections (top ' + pct + '%)', color: '#f0883e', cssClass: 'hot' };
+  }
+  if (total >= hotnessP50) {
+    return { tier: 'active', label: 'Active — ' + total + ' connections', color: '#58a6ff', cssClass: 'active' };
+  }
+  return { tier: 'low', label: 'Low — ' + total + ' connections', color: '#8b949e', cssClass: 'low' };
+}
+
+function getHeatColor(total) {
+  if (total === 0) return '#f85149';
+  if (total < hotnessP50) return '#8b949e';
+  if (total < hotnessP90) return '#58a6ff';
+  return '#f0883e';
+}
+
 // Tier 2/3: init Cytoscape EMPTY, add elements in batches to avoid blocking
 // Tier 1: init with everything (< 2000 nodes, fast enough)
 var initElements = renderTier === 1 ? elements : [];
@@ -871,6 +1115,21 @@ const cy = cytoscape({
         'text-wrap': 'ellipsis',
         'transition-property': 'opacity, background-color, border-color',
         'transition-duration': '0.15s',
+      }
+    },
+    {
+      selector: 'node[nodeSize]',
+      style: {
+        'width': 'data(nodeSize)',
+        'height': 'data(nodeSize)',
+      }
+    },
+    {
+      selector: 'node[?isDead]',
+      style: {
+        'border-style': 'dashed',
+        'opacity': 0.6,
+        'border-color': '#f85149',
       }
     },
     {
@@ -1293,7 +1552,7 @@ function openEdgePanel(edgeData) {
   var tgtId = esc(edgeData.target);
   var html = '<div class="panel-header">';
   html += '<h2>Edge: ' + edgeTypeStr + '</h2>';
-  html += '<button class="panel-close" onclick="closePanel()">x</button>';
+  html += '<button class="panel-close" data-action="close-panel">x</button>';
   html += '</div>';
   html += '<div class="panel-section">';
   html += '<h3>Connection</h3>';
@@ -1422,13 +1681,17 @@ function buildClusters() {
     var clusterId = 'cluster-' + key.replace(/[^a-zA-Z0-9]/g, '-');
     clusterNodes.set(clusterId, { label: key, children: groups[key] });
 
-    // Add compound parent
+    // Add compound parent with all required data fields to avoid Cytoscape warnings
     toAdd.push({
       group: 'nodes',
       data: {
         id: clusterId,
         label: key + ' (' + groups[key].length + ')',
+        shortLabel: key.split('/').pop() + ' (' + groups[key].length + ')',
         nodeColor: '#30363d',
+        nodeSize: 40,
+        isDead: 0,
+        totalConns: 0,
       }
     });
 
@@ -1614,8 +1877,6 @@ document.getElementById('toggleClusterBtn').addEventListener('click', function()
     removeClusters();
     this.textContent = '⬡ Flat';
     this.classList.remove('active');
-    document.getElementById('collapseAllBtn').style.display = 'none';
-    document.getElementById('expandAllBtn').style.display = 'none';
     cy.layout({
       name: 'cose',
       animate: false,
@@ -1631,8 +1892,6 @@ document.getElementById('toggleClusterBtn').addEventListener('click', function()
     buildClusters();
     this.textContent = '⬡ Clustered';
     this.classList.add('active');
-    document.getElementById('collapseAllBtn').style.display = '';
-    document.getElementById('expandAllBtn').style.display = '';
     cy.layout({
       name: 'cose',
       animate: false,
@@ -1646,9 +1905,6 @@ document.getElementById('toggleClusterBtn').addEventListener('click', function()
     }).run();
   }
 });
-
-document.getElementById('collapseAllBtn').addEventListener('click', collapseAll);
-document.getElementById('expandAllBtn').addEventListener('click', expandAll);
 
 
 
@@ -1826,45 +2082,90 @@ document.getElementById('filters').addEventListener('click', (e) => {
 
 function applyFilters() {
   updateVisibilityStates();
+  // If flow view is active with a traced path, re-apply flow highlight to respect new filters
+  if (flowActive && cy) {
+    var tracedNodes = cy.nodes('.highlighted');
+    if (tracedNodes.length > 0) {
+      var ids = [];
+      tracedNodes.forEach(function(n) { ids.push(n.id()); });
+      highlightFlowPath(ids);
+    }
+  }
 }
 
-// ---- VIEW TOGGLE (Graph / List) ----
+// ---- VIEW TOGGLE (Graph / List / Flow) ----
 const cyContainer = document.getElementById('cy');
 const listView = document.getElementById('listView');
+const flowPanel = document.getElementById('flowPanel');
 const viewToggle = document.getElementById('viewToggle');
 let currentView = 'graph';
 let listSortCol = 'name';
 let listSortAsc = true;
 
-viewToggle.addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn || btn.dataset.view === currentView) return;
+function switchView(newView) {
+  if (newView === currentView) return;
   // Block graph view for Tier 3 if too many visible nodes
-  if (btn.dataset.view === 'graph' && renderTier === 3) {
+  if (newView === 'graph' && renderTier === 3) {
     var visibleCount = cy.nodes().filter(function(n) { return n.style('display') !== 'none' && !n.isParent(); }).length;
     if (visibleCount >= 2000) return;
   }
 
-  currentView = btn.dataset.view;
-  viewToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  // Clean up previous view
+  if (currentView === 'flow') {
+    exitFlowView();
+  }
 
-  if (currentView === 'list') {
-    cyContainer.classList.add('hidden');
-    listView.classList.add('active');
-    renderListView();
+  currentView = newView;
+  viewToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  var activeBtn = viewToggle.querySelector('button[data-view="' + newView + '"]');
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Hide all views
+  cyContainer.classList.add('hidden');
+  listView.classList.remove('active');
+  flowPanel.classList.remove('active');
+
+  // Show/hide graph-only controls (trace, cluster) — only visible in Graph view
+  var traceEl = document.getElementById('traceControls');
+  var clusterEl = document.getElementById('clusterControls');
+  if (newView === 'graph') {
+    if (traceEl && traceOriginId) traceEl.style.display = 'flex';
+    if (clusterEl && nodeCount > 50) clusterEl.style.display = 'flex';
   } else {
-    // Tier 3: lazily load edges when switching to graph
+    if (traceEl) traceEl.style.display = 'none';
+    if (clusterEl) clusterEl.style.display = 'none';
+  }
+
+  if (newView === 'list') {
+    listView.classList.add('active');
+    searchInput.disabled = false;
+    applyFilters();
+    renderListView();
+  } else if (newView === 'flow') {
+    flowPanel.classList.add('active');
+    cyContainer.classList.remove('hidden');
+    searchInput.disabled = true;
+    searchInput.value = '';
+    cy.resize();
+    initFlowPanel();
+  } else {
+    // graph
     if (typeof loadTier3EdgesIfNeeded === 'function') loadTier3EdgesIfNeeded();
     cyContainer.classList.remove('hidden');
-    listView.classList.remove('active');
+    searchInput.disabled = false;
+    applyFilters(); // Re-apply type filters after flow cleanup
     cy.resize();
-    // Run deferred layout if needed (Tier 2: container was hidden during batch loading)
     if (needsGraphLayout) {
       needsGraphLayout = false;
       cy.layout({ name: 'grid', animate: false, nodeDimensionsIncludeLabels: true, padding: 40, avoidOverlap: true, condense: true }).run();
     }
   }
+}
+
+viewToggle.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.dataset.view) return;
+  switchView(btn.dataset.view);
 });
 
 // Default to list view for Tier 2/3
@@ -1885,22 +2186,7 @@ if (renderTier === 3 && graphBtn) {
   graphBtn.title = 'Filter below 2,000 nodes to enable graph view';
 }
 
-// Pre-compute connection counts from edgeElements (always available, independent of Cytoscape state)
-var inCount = {};
-var outCount = {};
-function recomputeConnectionCounts() {
-  // Reset
-  for (var k in inCount) delete inCount[k];
-  for (var k in outCount) delete outCount[k];
-  edgeElements.forEach(function(e) {
-    var src = e.data.source;
-    var tgt = e.data.target;
-    outCount[src] = (outCount[src] || 0) + 1;
-    inCount[tgt] = (inCount[tgt] || 0) + 1;
-  });
-}
-// Compute immediately for all tiers (edgeElements is always available)
-recomputeConnectionCounts();
+// inCount/outCount/totalConns/isDead already computed above in HOTNESS PRE-COMPUTATION
 
 function renderListView() {
   const query = searchInput.value.trim().toLowerCase();
@@ -1927,6 +2213,7 @@ function renderListView() {
     let va, vb;
     if (listSortCol === 'in') { va = inCount[a.id] || 0; vb = inCount[b.id] || 0; }
     else if (listSortCol === 'out') { va = outCount[a.id] || 0; vb = outCount[b.id] || 0; }
+    else if (listSortCol === 'total') { va = totalConns[a.id] || 0; vb = totalConns[b.id] || 0; }
     else { va = a[listSortCol] || ''; vb = b[listSortCol] || ''; }
     if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
     if (va < vb) return listSortAsc ? -1 : 1;
@@ -1943,31 +2230,70 @@ function renderListView() {
         <th data-col="type">Type<span class="sort-arrow">${arrow('type')}</span></th>
         <th data-col="file">File<span class="sort-arrow">${arrow('file')}</span></th>
         <th data-col="line">Line<span class="sort-arrow">${arrow('line')}</span></th>
-        <th data-col="in">In<span class="sort-arrow">${arrow('in')}</span></th>
-        <th data-col="out">Out<span class="sort-arrow">${arrow('out')}</span></th>
+        <th data-col="in">In <span class="col-help" title="Number of functions/components that call this node">?</span><span class="sort-arrow">${arrow('in')}</span></th>
+        <th data-col="out">Out <span class="col-help" title="Number of functions/components this node calls">?</span><span class="sort-arrow">${arrow('out')}</span></th>
+        <th data-col="total">Total <span class="col-help" title="In + Out combined connections">?</span><span class="sort-arrow">${arrow('total')}</span></th>
+        <th>Heat <span class="col-help" title="Usage indicator: Dead (0 callers) / Low / Active / Hot (top 10%). Based on connection count relative to other nodes">?</span></th>
       </tr></thead>
       <tbody>
-        ${rows.map(n => `
-          <tr data-id="${esc(n.id)}">
+        ${rows.map(n => {
+          const total = totalConns[n.id] || 0;
+          const barWidth = maxConns > 0 ? Math.round((total / maxConns) * 100) : 0;
+          const heatColor = getHeatColor(total);
+          const dead = isDead[n.id];
+          return `
+          <tr data-id="${esc(n.id)}" ${dead ? 'style="opacity:0.6"' : ''}>
             <td style="color:${NODE_COLORS[n.type] || '#c9d1d9'}">${esc(n.name)}</td>
             <td><span class="type-badge type-${esc(n.type)}">${esc(n.type)}</span></td>
             <td style="color:#8b949e">${esc(n.file)}</td>
             <td style="color:#8b949e">${n.line}</td>
             <td class="list-conn-count">${inCount[n.id] || 0}</td>
             <td class="list-conn-count">${outCount[n.id] || 0}</td>
-          </tr>
-        `).join('')}
+            <td class="list-conn-count">${total}</td>
+            <td>${dead
+              ? '<span class="dead-badge">dead</span>'
+              : '<span class="heat-bar" style="width:' + Math.max(barWidth, 2) + 'px;background:' + heatColor + '"></span>'
+            }</td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
   `;
 
-  // Sort on header click
+  // Sort on header click (skip if clicking help icon)
   listView.querySelectorAll('th[data-col]').forEach(th => {
-    th.addEventListener('click', () => {
+    th.addEventListener('click', (e) => {
+      if (e.target.closest('.col-help')) return; // Don't sort when clicking ?
       const col = th.dataset.col;
       if (listSortCol === col) { listSortAsc = !listSortAsc; }
       else { listSortCol = col; listSortAsc = true; }
       renderListView();
+    });
+  });
+
+  // Help icon click → show/hide tooltip popup
+  listView.querySelectorAll('.col-help').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Remove any existing tooltip
+      var existing = document.querySelector('.col-help-popup');
+      if (existing) { existing.remove(); return; }
+      // Create tooltip popup
+      var popup = document.createElement('div');
+      popup.className = 'col-help-popup';
+      popup.textContent = btn.getAttribute('title');
+      popup.style.cssText = 'position:fixed;z-index:9999;background:#1c2128;border:1px solid #444c56;border-radius:6px;padding:8px 12px;font-size:12px;color:#c9d1d9;max-width:260px;box-shadow:0 4px 12px rgba(0,0,0,0.4);';
+      var rect = btn.getBoundingClientRect();
+      popup.style.top = (rect.bottom + 6) + 'px';
+      popup.style.left = Math.max(8, rect.left - 80) + 'px';
+      document.body.appendChild(popup);
+      // Auto-dismiss on click anywhere
+      setTimeout(function() {
+        document.addEventListener('click', function dismiss() {
+          popup.remove();
+          document.removeEventListener('click', dismiss);
+        }, { once: true });
+      }, 10);
     });
   });
 
@@ -2034,11 +2360,16 @@ function openPanel(nodeData) {
     `;
   }
 
+  // Hotness indicator
+  const hotness = getHotnessTier(n.id);
+  const hotnessHtml = `<div class="hotness-indicator ${hotness.cssClass}" style="color:${hotness.color}">${esc(hotness.label)}</div>`;
+
   detailPanel.innerHTML = `
     <div class="panel-header">
       <h2>${esc(n.label)}</h2>
-      <button class="panel-close" onclick="closePanel()">✕</button>
+      <button class="panel-close" data-action="close-panel">✕</button>
     </div>
+    ${hotnessHtml}
     ${infoHtml}
     ${incoming.length > 0 ? `
     <div class="panel-section">
@@ -2080,6 +2411,13 @@ function closePanel() {
   cy.nodes().removeClass('selected-node');
   updateMinimapPosition();
 }
+
+// Close panel button (delegated event)
+detailPanel.addEventListener('click', function(e) {
+  if (e.target.closest('[data-action="close-panel"]')) {
+    closePanel();
+  }
+});
 
 function updateMinimapPosition() {
   if (!minimapEl) return;
@@ -2299,6 +2637,418 @@ document.addEventListener('keydown', function(e) {
     minimapEl.classList.toggle('hidden', !minimapVisible);
     minimapToggle.classList.toggle('active', minimapVisible);
     if (minimapVisible) renderMinimap();
+  }
+});
+
+// ---- FLOW VIEW (Call Flow Trace) ----
+var flowMaxDepth = 10;
+var flowEntryId = null;
+var flowActive = false;
+
+// Build node name/type lookup
+var flowNodeMap = {};
+GRAPH_DATA.nodes.forEach(function(n) { flowNodeMap[n.id] = n; });
+routeNodes.forEach(function(rn, id) { flowNodeMap[id] = { id: id, name: rn.label, type: 'route', file: null, line: null }; });
+
+function getEntryPoints() {
+  var routes = [];
+  var handlers = [];
+  var grpcs = [];
+  var services = [];
+  var components = [];
+  var functions = [];
+
+  // Virtual route nodes
+  routeNodes.forEach(function(rn, id) {
+    routes.push({ id: id, name: rn.label, type: 'route' });
+  });
+
+  // Real nodes that are entry points
+  GRAPH_DATA.nodes.forEach(function(n) {
+    if (n.type === 'handler') handlers.push({ id: n.id, name: n.name, type: 'handler' });
+    else if (n.type === 'grpc') grpcs.push({ id: n.id, name: n.name, type: 'grpc' });
+    else if (n.type === 'service') services.push({ id: n.id, name: n.name, type: 'service' });
+    else if (n.type === 'component') {
+      // Page components (Next.js app/**/page.tsx, pages/**) are top-level entry points
+      var f = (n.file || '').split('\\').join('/');
+      var isPage = /\/(page|layout|loading|error|not-found|template)\.(ts|tsx|js|jsx)$/.test(f)
+        || /^(app|pages)\//.test(f);
+      if (isPage) {
+        components.unshift({ id: n.id, name: n.name + ' (' + n.file + ')', type: 'component' });
+      } else {
+        components.push({ id: n.id, name: n.name, type: 'component' });
+      }
+    } else if (n.type === 'function' && (outCount[n.id] || 0) > 0) {
+      // Functions with outgoing calls can be traced
+      functions.push({ id: n.id, name: n.name, type: 'function' });
+    }
+  });
+
+  var sortFn = function(a, b) { return a.name.localeCompare(b.name); };
+  routes.sort(sortFn);
+  handlers.sort(sortFn);
+  grpcs.sort(sortFn);
+  services.sort(sortFn);
+  components.sort(sortFn);
+  functions.sort(sortFn);
+
+  return { routes: routes, handlers: handlers, grpcs: grpcs, services: services, components: components, functions: functions };
+}
+
+function buildCallTree(nodeId, maxDepth) {
+  var tree = [];
+  var SAFETY_LIMIT = 500;
+
+  function dfs(id, depth, ancestors) {
+    if (tree.length >= SAFETY_LIMIT) return;
+    if (depth > maxDepth) {
+      tree.push({ id: id, name: '...', type: 'truncated', depth: depth, circular: false, truncated: true });
+      return;
+    }
+
+    var node = flowNodeMap[id];
+    var name = node ? node.name : id;
+    var type = node ? node.type : '?';
+
+    // Cycle detection: check if node is ancestor in current path
+    if (ancestors.has(id)) {
+      tree.push({ id: id, name: name, type: type, depth: depth, circular: true, truncated: false });
+      return;
+    }
+
+    tree.push({ id: id, name: name, type: type, depth: depth, circular: false, truncated: false });
+
+    var newAncestors = new Set(ancestors);
+    newAncestors.add(id);
+
+    // Follow routes-to first, then imports, then calls
+    var targets = [];
+    edgeElements.forEach(function(e) {
+      if (e.data.source === id) {
+        if (e.data.edgeType === 'routes-to') targets.unshift(e.data.target);
+        else if (e.data.edgeType === 'imports') targets.push(e.data.target);
+        else if (e.data.edgeType === 'calls') targets.push(e.data.target);
+      }
+    });
+
+    // Deduplicate while preserving order
+    var seen = new Set();
+    targets.forEach(function(t) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        dfs(t, depth + 1, newAncestors);
+      }
+    });
+  }
+
+  // For route entry points: show upstream callers recursively + downstream targets
+  var entryNode = flowNodeMap[nodeId];
+  if (entryNode && entryNode.type === 'route') {
+    tree.push({ id: nodeId, name: entryNode.name, type: 'route', depth: 0, circular: false, truncated: false });
+
+    // Trace upstream recursively (who calls the route source?)
+    var upstreamVisited = new Set();
+    upstreamVisited.add(nodeId);
+    function traceUpstream(targetId, depth) {
+      if (depth > maxDepth || tree.length >= SAFETY_LIMIT) return;
+      edgeElements.forEach(function(e) {
+        if (e.data.target === targetId && !upstreamVisited.has(e.data.source)) {
+          upstreamVisited.add(e.data.source);
+          var srcNode = flowNodeMap[e.data.source];
+          if (srcNode) {
+            tree.push({ id: e.data.source, name: srcNode.name, type: srcNode.type, depth: depth, circular: false, truncated: false, upstream: true });
+            traceUpstream(e.data.source, depth + 1);
+          }
+        }
+      });
+    }
+    // Find route source (DataSource/Service that owns this route)
+    edgeElements.forEach(function(e) {
+      if (e.data.target === nodeId && !upstreamVisited.has(e.data.source)) {
+        upstreamVisited.add(e.data.source);
+        var srcNode = flowNodeMap[e.data.source];
+        if (srcNode) {
+          tree.push({ id: e.data.source, name: srcNode.name, type: srcNode.type, depth: 1, circular: false, truncated: false, upstream: true });
+          traceUpstream(e.data.source, 2);
+        }
+      }
+    });
+
+    // Then trace downstream from route
+    edgeElements.forEach(function(e) {
+      if (e.data.source === nodeId) {
+        dfs(e.data.target, 1, new Set([nodeId]));
+      }
+    });
+    return { tree: tree, truncatedByLimit: tree.length >= SAFETY_LIMIT };
+  }
+
+  dfs(nodeId, 0, new Set());
+  return { tree: tree, truncatedByLimit: tree.length >= SAFETY_LIMIT };
+}
+
+function flowConnector(depth) {
+  if (depth === 0) return '';
+  var prefix = '';
+  for (var i = 1; i < depth; i++) prefix += '│   ';
+  return prefix + '├── ';
+}
+
+function renderFlowTree(entryId) {
+  flowEntryId = entryId;
+  if (!entryId) {
+    flowPanel.querySelector('.flow-tree').innerHTML = '<div class="flow-empty">Select an entry point and click Trace</div>';
+    flowPanel.querySelector('.flow-footer').textContent = '';
+    clearFlowHighlight();
+    return;
+  }
+
+  var result = buildCallTree(entryId, flowMaxDepth);
+  var tree = result.tree;
+  var maxTreeDepth = 0;
+  tree.forEach(function(t) { if (t.depth > maxTreeDepth) maxTreeDepth = t.depth; });
+
+  var treeHtml = '';
+  if (result.truncatedByLimit) {
+    treeHtml += '<div class="flow-warning">Call tree too large (500+ items). Reduce depth limit or choose a more specific entry point.</div>';
+  }
+
+  treeHtml += tree.map(function(item) {
+    var indent = 12 + item.depth * 20;
+    var color = NODE_COLORS[item.type] || '#c9d1d9';
+    var connector = flowConnector(item.depth);
+    var badges = '';
+    if (item.circular) badges = '<span class="flow-circular">circular</span>';
+    if (item.truncated) badges = '<span class="flow-truncated">(depth limit)</span>';
+    return '<div class="flow-item" style="padding-left:' + indent + 'px" data-focus-id="' + esc(item.id) + '">'
+      + '<span class="flow-connector">' + connector + '</span>'
+      + '<span class="flow-name" style="color:' + color + '">' + esc(item.name) + '</span> '
+      + '<span class="type-badge type-' + esc(item.type) + '">' + esc(item.type) + '</span> '
+      + badges
+      + '</div>';
+  }).join('');
+
+  flowPanel.querySelector('.flow-tree').innerHTML = treeHtml;
+  flowPanel.querySelector('.flow-footer').textContent = tree.length + ' functions in chain | max depth: ' + maxTreeDepth;
+
+  // Click flow item -> focus node on graph + open detail
+  flowPanel.querySelectorAll('.flow-item[data-focus-id]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var id = el.dataset.focusId;
+      // Highlight active item
+      flowPanel.querySelectorAll('.flow-item').forEach(function(fi) { fi.classList.remove('active'); });
+      el.classList.add('active');
+      // Focus on graph + open detail panel
+      var cyNode = cy.getElementById(id);
+      if (cyNode.length > 0) {
+        cy.animate({ center: { eles: cyNode }, zoom: Math.max(cy.zoom(), 1.2) }, { duration: 300 });
+        openPanel(cyNode.data());
+      } else {
+        // Virtual route node or not in Cytoscape
+        var rn = routeNodes.get(id);
+        if (rn) openPanel(rn);
+      }
+    });
+  });
+
+  // Highlight traced path on graph (if graph is visible)
+  highlightFlowPath(tree.filter(function(t) { return !t.truncated; }).map(function(t) { return t.id; }));
+}
+
+function highlightFlowPath(nodeIds) {
+  if (!cy) return;
+  var idSet = new Set(nodeIds);
+
+  cy.batch(function() {
+    // Hide non-traced nodes completely, show only traced ones
+    // Respect activeTypes filter — don't show nodes whose type is filtered off
+    cy.nodes().forEach(function(n) {
+      var isTraced = idSet.has(n.id());
+      var isTypeActive = activeTypes.has(n.data('type'));
+      if (isTraced && isTypeActive) {
+        n.style('display', 'element');
+        n.removeClass('faded');
+        n.addClass('highlighted');
+      } else {
+        n.style('display', 'none');
+      }
+    });
+    cy.edges().forEach(function(e) {
+      var src = e.source().id();
+      var tgt = e.target().id();
+      var srcVisible = idSet.has(src) && activeTypes.has(e.source().data('type'));
+      var tgtVisible = idSet.has(tgt) && activeTypes.has(e.target().data('type'));
+      if (srcVisible && tgtVisible) {
+        e.style('display', 'element');
+        e.removeClass('faded');
+        e.style({ 'width': 3, 'opacity': 1 });
+      } else {
+        e.style('display', 'none');
+      }
+    });
+  });
+
+  // Re-layout only the visible (traced) subgraph with a clean layout
+  var tracedNodes = cy.nodes().filter(function(n) { return n.style('display') !== 'none'; });
+  if (tracedNodes.length > 0 && tracedNodes.length <= 200) {
+    var visibleEles = tracedNodes.union(cy.edges().filter(function(e) { return e.style('display') !== 'none'; }));
+    visibleEles.layout({
+      name: 'cose',
+      animate: true,
+      animationDuration: 400,
+      nodeRepulsion: function() { return 8000; },
+      idealEdgeLength: function() { return 80; },
+      gravity: 0.3,
+      padding: 60,
+      nodeDimensionsIncludeLabels: true,
+      avoidOverlap: true,
+      randomize: false,
+    }).run();
+  } else if (tracedNodes.length > 0) {
+    cy.fit(tracedNodes, 60);
+  }
+}
+
+function clearFlowHighlight() {
+  if (!cy) return;
+  cy.batch(function() {
+    cy.nodes().removeClass('faded highlighted');
+    cy.edges().removeClass('faded');
+    cy.edges().style({ 'width': '', 'opacity': '' });
+  });
+  // Re-apply type filters after clearing flow highlight
+  updateVisibilityStates();
+}
+
+function initFlowPanel() {
+  flowActive = true;
+  var eps = getEntryPoints();
+
+  var selectHtml = '<option value="">-- Select entry point --</option>';
+  if (eps.routes.length > 0) {
+    selectHtml += '<optgroup label="Routes">';
+    eps.routes.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
+    selectHtml += '</optgroup>';
+  }
+  if (eps.handlers.length > 0) {
+    selectHtml += '<optgroup label="Handlers">';
+    eps.handlers.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
+    selectHtml += '</optgroup>';
+  }
+  if (eps.grpcs.length > 0) {
+    selectHtml += '<optgroup label="gRPC Services">';
+    eps.grpcs.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
+    selectHtml += '</optgroup>';
+  }
+  if (eps.services.length > 0) {
+    selectHtml += '<optgroup label="Services">';
+    eps.services.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
+    selectHtml += '</optgroup>';
+  }
+  if (eps.components.length > 0) {
+    selectHtml += '<optgroup label="Components">';
+    eps.components.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
+    selectHtml += '</optgroup>';
+  }
+  if (eps.functions.length > 0) {
+    selectHtml += '<optgroup label="Functions">';
+    eps.functions.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
+    selectHtml += '</optgroup>';
+  }
+
+  flowPanel.innerHTML = ''
+    + '<div class="flow-header">'
+    + '  <label>Entry Point</label>'
+    + '  <select class="flow-entry-select" id="flowEntrySelect">' + selectHtml + '</select>'
+    + '</div>'
+    + '<div class="flow-depth-controls">'
+    + '  <span>Depth:</span>'
+    + '  <input type="range" id="flowDepthSlider" min="3" max="20" value="' + flowMaxDepth + '">'
+    + '  <span id="flowDepthLabel">' + flowMaxDepth + '</span>'
+    + '</div>'
+    + '<div class="flow-tree"><div class="flow-empty">Select an entry point to trace the call flow</div></div>'
+    + '<div class="flow-footer"></div>';
+
+  // Entry point select
+  var select = document.getElementById('flowEntrySelect');
+  select.addEventListener('change', function() {
+    var val = select.value;
+    if (val) renderFlowTree(val);
+    else renderFlowTree(null);
+  });
+
+  // Depth slider
+  var slider = document.getElementById('flowDepthSlider');
+  var depthLabel = document.getElementById('flowDepthLabel');
+  slider.addEventListener('input', function() {
+    flowMaxDepth = parseInt(slider.value);
+    depthLabel.textContent = flowMaxDepth;
+    if (flowEntryId) renderFlowTree(flowEntryId);
+  });
+
+  // If already had an entry, restore it
+  if (flowEntryId) {
+    select.value = flowEntryId;
+    renderFlowTree(flowEntryId);
+  }
+}
+
+function exitFlowView() {
+  flowActive = false;
+  flowPanel.classList.remove('active');
+  clearFlowHighlight();
+  searchInput.disabled = false;
+}
+
+// Right-click on graph node: "Trace from here"
+cy.on('cxttap', 'node', function(evt) {
+  var nodeId = evt.target.id();
+  flowEntryId = nodeId;
+  switchView('flow');
+  // Set the select value after flow panel is initialized
+  setTimeout(function() {
+    var select = document.getElementById('flowEntrySelect');
+    if (select) {
+      // Add as custom option if not in dropdown
+      var found = false;
+      for (var i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === nodeId) { found = true; break; }
+      }
+      if (!found) {
+        var node = flowNodeMap[nodeId];
+        var opt = document.createElement('option');
+        opt.value = nodeId;
+        opt.textContent = node ? node.name : nodeId;
+        select.appendChild(opt);
+      }
+      select.value = nodeId;
+      renderFlowTree(nodeId);
+    }
+  }, 50);
+});
+
+// Keyboard shortcuts for Flow
+document.addEventListener('keydown', function(e) {
+  if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT')) return;
+
+  if (e.key === 'f' || e.key === 'F') {
+    if (currentView !== 'flow') switchView('flow');
+    e.preventDefault();
+  }
+  if (e.key === 'Escape' && currentView === 'flow') {
+    switchView('graph');
+    e.preventDefault();
+  }
+  // 1-9 to set depth when in flow view
+  if (currentView === 'flow' && e.key >= '1' && e.key <= '9') {
+    var d = parseInt(e.key);
+    var mappedDepth = d === 9 ? 20 : d + 2; // 1->3, 2->4, ... 8->10, 9->20
+    flowMaxDepth = mappedDepth;
+    var slider = document.getElementById('flowDepthSlider');
+    var label = document.getElementById('flowDepthLabel');
+    if (slider) { slider.value = mappedDepth; }
+    if (label) { label.textContent = mappedDepth; }
+    if (flowEntryId) renderFlowTree(flowEntryId);
   }
 });
 

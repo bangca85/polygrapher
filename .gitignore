@@ -5,7 +5,7 @@ dist/
 .DS_Store
 
 # Agent & docs
-_bmad*/
-.agent/
-.claude/
-docs/
+# _bmad*/
+# .agent/
+# .claude/
+# docs/

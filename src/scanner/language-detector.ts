@@ -10,13 +10,11 @@ interface DetectionResult {
 // Only languages with implemented extractors go here
 const LANGUAGE_CONFIG_MAP: Record<string, Language> = {
   'go.mod': Language.Go,
-  // 'package.json': Language.TypeScript,  // Release 1.1
-  // 'pubspec.yaml': Language.Dart,        // Release 1.2
+  'package.json': Language.TypeScript,
+  'pubspec.yaml': Language.Dart,
 };
 
 const UNSUPPORTED_CONFIG_MAP: Record<string, string> = {
-  'package.json': 'TypeScript/JavaScript (coming in Release 1.1)',
-  'pubspec.yaml': 'Dart/Flutter (coming in Release 1.2)',
   'requirements.txt': 'Python',
   'Cargo.toml': 'Rust',
   'pom.xml': 'Java',
@@ -29,20 +27,42 @@ export function detectLanguages(rootPath: string): DetectionResult {
   const supported: Language[] = [];
   const unsupported: { file: string; language: string }[] = [];
 
-  const entries = fs.readdirSync(rootPath);
-
-  for (const entry of entries) {
-    if (LANGUAGE_CONFIG_MAP[entry]) {
-      const lang = LANGUAGE_CONFIG_MAP[entry];
-      if (!supported.includes(lang)) {
-        supported.push(lang);
+  // Scan root directory and immediate subdirectories for config files
+  // This supports monorepo layouts like: backend/go.mod, web/package.json, mobile/pubspec.yaml
+  const dirsToScan = [rootPath];
+  try {
+    const rootEntries = fs.readdirSync(rootPath, { withFileTypes: true });
+    for (const entry of rootEntries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== 'vendor') {
+        dirsToScan.push(path.join(rootPath, entry.name));
       }
     }
-    if (UNSUPPORTED_CONFIG_MAP[entry]) {
-      unsupported.push({
-        file: entry,
-        language: UNSUPPORTED_CONFIG_MAP[entry],
-      });
+  } catch { /* ignore read errors */ }
+
+  for (const dir of dirsToScan) {
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (LANGUAGE_CONFIG_MAP[entry]) {
+        const lang = LANGUAGE_CONFIG_MAP[entry];
+        if (!supported.includes(lang)) {
+          supported.push(lang);
+        }
+      }
+      if (UNSUPPORTED_CONFIG_MAP[entry]) {
+        const alreadyReported = unsupported.some(u => u.file === entry);
+        if (!alreadyReported) {
+          unsupported.push({
+            file: entry,
+            language: UNSUPPORTED_CONFIG_MAP[entry],
+          });
+        }
+      }
     }
   }
 

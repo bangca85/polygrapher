@@ -2,12 +2,15 @@ export enum NodeType {
   Function = 'function',
   Handler = 'handler',
   Component = 'component',
+  Hook = 'hook',
   Service = 'service',
   Grpc = 'grpc',
   Route = 'route',
   Struct = 'struct',
   Worker = 'worker',
   Entity = 'entity',
+  Bloc = 'bloc',
+  Model = 'model',
 }
 
 export enum EdgeType {
@@ -44,6 +47,7 @@ export interface GraphNode {
   line: number;
   signature: string;
   repo: string;
+  metadata?: Record<string, string>;
 }
 
 export interface GraphEdge {
@@ -53,6 +57,7 @@ export interface GraphEdge {
   protocol: Protocol;
   metadata?: Record<string, string>;
   callLine?: number;
+  matchConfidence?: 'exact' | 'partial' | 'inferred' | 'none';
 }
 
 export interface SystemMap {

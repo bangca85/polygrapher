@@ -1,0 +1,9 @@
+name: modern_app
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  hooks_riverpod: ^2.4.0
+  dio: ^5.0.0
+  go_router: ^12.0.0

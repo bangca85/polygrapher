@@ -11,6 +11,8 @@ const DEFAULT_IGNORES = [
   '.git/',
   'dist/',
   'build/',
+  '*.g.dart',
+  '*.freezed.dart',
 ];
 
 function loadGitignore(rootPath: string): ReturnType<typeof ignore> {

@@ -1,6 +1,6 @@
 {
   "name": "polygrapher",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Zero-config CLI that generates instant, interactive codebase maps",
   "type": "module",
   "bin": {
@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
-  "keywords": [
+  "keywords": [ 
     "codebase",
     "graph",
     "architecture",
@@ -29,11 +29,14 @@
     "cytoscape": "^3.33.1",
     "ignore": "^7.0.5",
     "open": "^10.1.0",
-    "web-tree-sitter": "^0.24.3"
+    "web-tree-sitter": "^0.24.7"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "tree-sitter-cli": "^0.24.3",
     "tree-sitter-go": "^0.23.4",
+    "tree-sitter-javascript": "^0.21.3",
+    "tree-sitter-typescript": "^0.23.2",
     "tsup": "^8.1.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
@@ -43,6 +46,7 @@
   },
   "files": [
     "dist",
-    "grammars"
+    "grammars",
+    "README.md"
   ]
 }
