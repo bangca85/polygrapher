@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "repo": "method-calls",
+    "languages": [
+      "go"
+    ],
+    "generatedAt": "2026-03-25T08:22:20.898Z",
+    "polygrapher": "0.1.0"
+  },
+  "nodes": [
+    {
+      "id": "11bc2331d7a6",
+      "name": "Server.Handle",
+      "type": "function",
+      "language": "go",
+      "file": "main.go",
+      "line": 5,
+      "signature": "func (s *Server) Handle()",
+      "repo": "method-calls"
+    },
+    {
+      "id": "6f2c1c1be5c4",
+      "name": "Server.Process",
+      "type": "function",
+      "language": "go",
+      "file": "main.go",
+      "line": 9,
+      "signature": "func (s *Server) Process() string",
+      "repo": "method-calls"
+    },
+    {
+      "id": "814cf870b4f0",
+      "name": "main",
+      "type": "function",
+      "language": "go",
+      "file": "main.go",
+      "line": 13,
+      "signature": "func main()",
+      "repo": "method-calls"
+    }
+  ],
+  "edges": [
+    {
+      "source": "11bc2331d7a6",
+      "target": "6f2c1c1be5c4",
+      "type": "calls",
+      "protocol": "internal"
+    },
+    {
+      "source": "814cf870b4f0",
+      "target": "11bc2331d7a6",
+      "type": "calls",
+      "protocol": "internal"
+    }
+  ]
+}

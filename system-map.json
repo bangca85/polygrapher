@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "repo": "polygrapher",
+    "languages": [
+      "typescript"
+    ],
+    "generatedAt": "2026-03-25T08:08:14.752Z",
+    "polygrapher": "0.1.0"
+  },
+  "nodes": [],
+  "edges": []
+}

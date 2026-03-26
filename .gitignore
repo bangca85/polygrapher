@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.wasm
+!grammars/*.wasm
+.DS_Store
+
+# Agent & docs
+_bmad*/
+.agent/
+.claude/
+docs/

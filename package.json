@@ -1,0 +1,48 @@
+{
+  "name": "polygrapher",
+  "version": "0.2.0",
+  "description": "Zero-config CLI that generates instant, interactive codebase maps",
+  "type": "module",
+  "bin": {
+    "polygrapher": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "codebase",
+    "graph",
+    "architecture",
+    "visualization",
+    "cli",
+    "tree-sitter"
+  ],
+  "author": "Bradley",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "cytoscape": "^3.33.1",
+    "ignore": "^7.0.5",
+    "open": "^10.1.0",
+    "web-tree-sitter": "^0.24.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tree-sitter-go": "^0.23.4",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "grammars"
+  ]
+}

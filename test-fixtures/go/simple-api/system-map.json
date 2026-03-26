@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "repo": "simple-api",
+    "languages": [
+      "go"
+    ],
+    "generatedAt": "2026-03-25T10:48:32.309Z",
+    "polygrapher": "0.1.1"
+  },
+  "nodes": [
+    {
+      "id": "c020006828d7",
+      "name": "main",
+      "type": "function",
+      "language": "go",
+      "file": "main.go",
+      "line": 8,
+      "signature": "func main()",
+      "repo": "simple-api"
+    },
+    {
+      "id": "88d72caf0705",
+      "name": "HandleHealth",
+      "type": "handler",
+      "language": "go",
+      "file": "main.go",
+      "line": 15,
+      "signature": "func HandleHealth(w http.ResponseWriter, r *http.Request)",
+      "repo": "simple-api"
+    },
+    {
+      "id": "25637e9af2c6",
+      "name": "HandleBooking",
+      "type": "handler",
+      "language": "go",
+      "file": "main.go",
+      "line": 20,
+      "signature": "func HandleBooking(w http.ResponseWriter, r *http.Request)",
+      "repo": "simple-api"
+    },
+    {
+      "id": "ce2c8bc84537",
+      "name": "GetBookings",
+      "type": "function",
+      "language": "go",
+      "file": "main.go",
+      "line": 26,
+      "signature": "func GetBookings() []string",
+      "repo": "simple-api"
+    }
+  ],
+  "edges": [
+    {
+      "source": "25637e9af2c6",
+      "target": "ce2c8bc84537",
+      "type": "calls",
+      "protocol": "internal",
+      "callLine": 21
+    },
+    {
+      "source": "c020006828d7",
+      "target": "88d72caf0705",
+      "type": "routes-to",
+      "protocol": "REST",
+      "metadata": {
+        "method": "ANY",
+        "path": "/health"
+      },
+      "callLine": 9
+    },
+    {
+      "source": "c020006828d7",
+      "target": "25637e9af2c6",
+      "type": "routes-to",
+      "protocol": "REST",
+      "metadata": {
+        "method": "ANY",
+        "path": "/api/booking"
+      },
+      "callLine": 10
+    }
+  ]
+}
