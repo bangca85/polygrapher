@@ -21,6 +21,7 @@ interface FrameworkInfo {
   hasReactRouter: boolean;
   hasRedux: boolean;
   hasZustand: boolean;
+  hasNest: boolean;
 }
 
 interface AxiosInstance {
@@ -84,6 +85,19 @@ export class TypeScriptExtractor implements LanguageExtractor {
           const fileRoutes = this.extractNextRoutes(tree, relFile, source);
           allRoutes.push(...fileRoutes);
         }
+
+        // Extract React.lazy declarations as component nodes
+        // Import edges created in post-processing (need all files parsed first)
+        this.extractLazyComponents(source, relFile, allNodes, []);
+
+        // Route config object detection: { path: '/...', component: ComponentName }
+        // Supports React Router v5 config objects and similar patterns
+        const configRoutes = this.extractRouteConfigObjects(source, relFile);
+        allRoutes.push(...configRoutes);
+
+        // Express-like route detection: app.get('/path', handler), r.post('/path', handler)
+        const expressRoutes = this.extractExpressLikeRoutes(source, relFile);
+        allRoutes.push(...expressRoutes);
       } catch (error) {
         errors.push({
           file,
@@ -91,6 +105,9 @@ export class TypeScriptExtractor implements LanguageExtractor {
         });
       }
     }
+
+    // Post-processing: link React.lazy components to their actual components
+    this.resolveLazyImports(allNodes, allEdges);
 
     // Build name → node lookup
     const nameToNodes = new Map<string, GraphNode[]>();
@@ -188,9 +205,24 @@ export class TypeScriptExtractor implements LanguageExtractor {
           const sameFile = targets.find(t => t.file === callerFile);
           edge.target = (sameFile ?? targets[0]).id;
           resolvedEdges.push(edge);
+        } else if (edge.metadata?.kind === 'dependency-injection') {
+          // Preserve DI edges even when target is unresolved (cross-file injection)
+          resolvedEdges.push(edge);
         }
         // Drop unresolved call edges (stdlib, external)
       } else if (edge.type === EdgeType.Imports) {
+        // Preserve NestJS DI/module edges (they use class names as targets, not file paths)
+        const rel = edge.metadata?.relationship;
+        if (rel === 'injects' || rel === 'module-import' || rel === 'provides') {
+          // Try to resolve target class name to a node ID
+          const targetNodes = nameToNodes.get(edge.target);
+          if (targetNodes && targetNodes.length > 0) {
+            edge.target = targetNodes[0].id;
+          }
+          resolvedEdges.push(edge);
+          continue;
+        }
+
         // Resolve import edges by file path, not by name
         let importTarget = edge.target;
         const sourceFile = (edge.metadata as any)?.sourceFile ?? '';
@@ -266,41 +298,51 @@ export class TypeScriptExtractor implements LanguageExtractor {
       }
 
       const handlerNodes = nameToNodes.get(route.handlerName);
-      if (!handlerNodes || handlerNodes.length === 0) continue;
 
       // Prefer handler in the same file (important for GET/POST which appear in many files)
-      const sameFileHandler = handlerNodes.find(h => h.file === route.file);
-      const handler = sameFileHandler ?? handlerNodes[0];
+      const handler = handlerNodes
+        ? (handlerNodes.find(h => h.file === route.file) ?? handlerNodes[0])
+        : null;
 
       const enclosingNode = this.findEnclosingFunction(allNodes, route.file, route.line);
-      const sourceId = enclosingNode?.id ?? generateNodeId(route.file, 'route-setup', 0);
+      let sourceId: string;
 
-      if (!enclosingNode) {
+      if (enclosingNode) {
+        sourceId = enclosingNode.id;
+      } else {
+        // No enclosing function — create/reuse a router config node from the file
+        const routerName = path.basename(route.file, path.extname(route.file));
+        sourceId = generateNodeId(route.file, routerName, 0);
         const existing = allNodes.find(n => n.id === sourceId);
         if (!existing) {
           allNodes.push({
             id: sourceId,
-            name: 'route-setup',
-            type: NodeType.Function,
+            name: routerName,
+            type: NodeType.Route,
             language: Language.TypeScript,
             file: route.file,
             line: 0,
-            signature: '',
+            signature: route.file,
             repo: this.repoName,
           });
         }
       }
 
       // Rename generic handler names (GET, POST, etc.) to include route path
-      const httpMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-      if (httpMethods.includes(handler.name) && route.path) {
-        handler.name = `${handler.name} ${route.path}`;
-        handler.signature = `${handler.signature} // ${route.path}`;
+      if (handler) {
+        const httpMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+        if (httpMethods.includes(handler.name) && route.path) {
+          handler.name = `${handler.name} ${route.path}`;
+          handler.signature = `${handler.signature} // ${route.path}`;
+        }
       }
 
+      // Use handler ID as target, or component name as symbolic target (viewer creates virtual route node)
+      const targetId = handler ? handler.id : route.handlerName;
+
       resolvedEdges.push({
-        source: sourceId || handler.id,
-        target: handler.id,
+        source: sourceId,
+        target: targetId,
         type: EdgeType.RoutesTo,
         protocol: Protocol.REST,
         metadata: {
@@ -324,27 +366,30 @@ export class TypeScriptExtractor implements LanguageExtractor {
   // ─── Framework Detection ────────────────────────────────
 
   private detectFramework(): FrameworkInfo {
-    const info: FrameworkInfo = { hasNext: false, hasReact: false, hasReactRouter: false, hasRedux: false, hasZustand: false };
+    const info: FrameworkInfo = { hasNext: false, hasReact: false, hasReactRouter: false, hasRedux: false, hasZustand: false, hasNest: false };
 
     // Check root package.json
     this.checkPackageJson(path.join(this.rootPath, 'package.json'), info);
 
-    // Monorepo: also check sub-app package.json files (apps/*/package.json, packages/*/package.json)
-    if (!info.hasNext) {
-      for (const dir of ['apps', 'packages']) {
-        const dirPath = path.join(this.rootPath, dir);
-        try {
-          const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              this.checkPackageJson(path.join(dirPath, entry.name, 'package.json'), info);
-              if (info.hasNext) break;
+    // Monorepo: scan ALL immediate subdirectories for package.json
+    // Covers: apps/*, packages/*, nestjs/, frontend/, backend/, etc.
+    try {
+      const rootEntries = fs.readdirSync(this.rootPath, { withFileTypes: true });
+      for (const entry of rootEntries) {
+        if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+          this.checkPackageJson(path.join(this.rootPath, entry.name, 'package.json'), info);
+          // Also check nested: apps/web/package.json, packages/api/package.json
+          try {
+            const subEntries = fs.readdirSync(path.join(this.rootPath, entry.name), { withFileTypes: true });
+            for (const sub of subEntries) {
+              if (sub.isDirectory() && !sub.name.startsWith('.') && sub.name !== 'node_modules') {
+                this.checkPackageJson(path.join(this.rootPath, entry.name, sub.name, 'package.json'), info);
+              }
             }
-          }
-        } catch { /* dir doesn't exist */ }
-        if (info.hasNext) break;
+          } catch { /* ignore */ }
+        }
       }
-    }
+    } catch { /* ignore */ }
 
     return info;
   }
@@ -355,9 +400,10 @@ export class TypeScriptExtractor implements LanguageExtractor {
       const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
       if ('next' in allDeps) info.hasNext = true;
       if ('react' in allDeps || info.hasNext) info.hasReact = true;
-      if ('react-router-dom' in allDeps) info.hasReactRouter = true;
+      if ('react-router-dom' in allDeps || 'react-router' in allDeps) info.hasReactRouter = true;
       if ('@reduxjs/toolkit' in allDeps) info.hasRedux = true;
       if ('zustand' in allDeps) info.hasZustand = true;
+      if ('@nestjs/common' in allDeps || '@nestjs/core' in allDeps) info.hasNest = true;
     } catch { /* file doesn't exist or invalid JSON */ }
   }
 
@@ -507,6 +553,11 @@ export class TypeScriptExtractor implements LanguageExtractor {
     };
 
     visit();
+
+    // Story 12.11-12.13: NestJS extraction
+    if (framework.hasNest) {
+      this.extractNestJS(source, file, nodes, edges);
+    }
 
     // Story 12.17: React Router extraction (separate pass for full tree context)
     if (framework.hasReactRouter) {
@@ -1030,6 +1081,220 @@ export class TypeScriptExtractor implements LanguageExtractor {
           file,
         });
       }
+    }
+
+    return routes;
+  }
+
+  /**
+   * Extract routes from config object pattern: { path: '/...', component: ComponentName }
+   * Supports React Router v5 config objects and similar declarative route configs.
+   */
+  /**
+   * Extract React.lazy declarations as Component nodes.
+   * Pattern: const ComponentName = React.lazy(() => import('./Path'))
+   */
+  private extractLazyComponents(source: string, file: string, nodes: GraphNode[], edges: GraphEdge[]): void {
+    const lazyRe = /(?:const|let|var)\s+(\w+)\s*=\s*React\.lazy\s*\(\s*\(\)\s*=>\s*import\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)/g;
+    const existingNames = new Set(nodes.map(n => n.name));
+    let match;
+    while ((match = lazyRe.exec(source)) !== null) {
+      const name = match[1];
+      const importPath = match[2];
+      if (existingNames.has(name)) continue;
+      const line = source.substring(0, match.index).split('\n').length;
+      const nodeId = generateNodeId(file, name, line);
+      nodes.push({
+        id: nodeId,
+        name,
+        type: NodeType.Component,
+        language: Language.TypeScript,
+        file,
+        line,
+        signature: `React.lazy(() => import('${importPath}'))`,
+        repo: this.repoName,
+      });
+      existingNames.add(name);
+
+      // Create import edge from lazy component → actual component file
+      // Resolve relative import path to find the default export node
+      const dir = path.dirname(file);
+      let resolvedPath = path.join(dir, importPath).replace(/\\/g, '/');
+      // Try common extensions and index patterns
+      const candidates = [
+        resolvedPath,
+        resolvedPath + '/index',
+        resolvedPath + '.js',
+        resolvedPath + '.tsx',
+        resolvedPath + '.ts',
+        resolvedPath + '.jsx',
+      ];
+      for (const candidate of candidates) {
+        const normalizedCandidate = candidate.replace(/\\/g, '/');
+        // Find a node whose file matches this path
+        const targetNode = nodes.find(n =>
+          n.file.replace(/\\/g, '/').replace(/\.(js|jsx|ts|tsx)$/, '').replace(/\/index$/, '') ===
+          normalizedCandidate.replace(/\.(js|jsx|ts|tsx)$/, '').replace(/\/index$/, '')
+        );
+        if (targetNode) {
+          edges.push({
+            source: nodeId,
+            target: targetNode.id,
+            type: EdgeType.Imports,
+            protocol: Protocol.Internal,
+            metadata: { lazy: 'true' },
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  /** Link React.lazy component nodes to their actual default-export component nodes */
+  private resolveLazyImports(nodes: GraphNode[], edges: GraphEdge[]): void {
+    const lazyNodes = nodes.filter(n => n.signature.startsWith('React.lazy'));
+    if (lazyNodes.length === 0) return;
+
+    for (const lazyNode of lazyNodes) {
+      // Extract import path from signature: React.lazy(() => import('./SeatmapList'))
+      const importMatch = lazyNode.signature.match(/import\('([^']+)'\)/);
+      if (!importMatch) continue;
+
+      const importPath = importMatch[1];
+      const dir = path.dirname(lazyNode.file);
+      const resolvedBase = path.join(dir, importPath).replace(/\\/g, '/');
+
+      // Find a node in the target file (default export component)
+      const targetNode = nodes.find(n => {
+        if (n.id === lazyNode.id) return false;
+        const nFile = n.file.replace(/\\/g, '/').replace(/\.(js|jsx|ts|tsx)$/, '').replace(/\/index$/, '');
+        const rBase = resolvedBase.replace(/\.(js|jsx|ts|tsx)$/, '').replace(/\/index$/, '');
+        return nFile === rBase && (n.type === 'component' || n.type === 'function');
+      });
+
+      if (targetNode) {
+        // Use Calls type (not Imports) because target is already a resolved node ID
+        // Imports edges go through file-path resolution which would drop this
+        edges.push({
+          source: lazyNode.id,
+          target: targetNode.id,
+          type: EdgeType.Calls,
+          protocol: Protocol.Internal,
+          metadata: { lazy: 'true' },
+        });
+      }
+    }
+  }
+
+  private extractRouteConfigObjects(source: string, file: string): RouteRegistration[] {
+    const routes: RouteRegistration[] = [];
+
+    // Extract individual object blocks that contain both path: and component:
+    // This handles multi-line configs and any property order
+    const blockRe = /\{[^{}]*?\bpath:\s*['"]([^'"]+)['"][^{}]*?\bcomponent:\s*(\w+)[^{}]*?\}/gs;
+    let match;
+    while ((match = blockRe.exec(source)) !== null) {
+      routes.push({
+        method: 'ANY',
+        path: match[1],
+        handlerName: match[2],
+        line: source.substring(0, match.index).split('\n').length,
+        file,
+      });
+    }
+
+    // Also handle reverse order: component before path
+    const blockRe2 = /\{[^{}]*?\bcomponent:\s*(\w+)[^{}]*?\bpath:\s*['"]([^'"]+)['"][^{}]*?\}/gs;
+    while ((match = blockRe2.exec(source)) !== null) {
+      // Avoid duplicates
+      if (!routes.some(r => r.path === match[2])) {
+        routes.push({
+          method: 'ANY',
+          path: match[2],
+          handlerName: match[1],
+          line: source.substring(0, match.index).split('\n').length,
+          file,
+        });
+      }
+    }
+
+    return routes;
+  }
+
+  /**
+   * Extract Express/Fastify/Hono/Koa/Gaman-like route registrations.
+   * Matches patterns like:
+   *   app.get('/path', handler)
+   *   router.post('/path', (req, res) => { ... })
+   *   r.get('/path', [Controller, 'method'])
+   *   r.group('prefix', (v1) => { v1.get('/nested', handler) })
+   */
+  private extractExpressLikeRoutes(source: string, file: string): RouteRegistration[] {
+    const routes: RouteRegistration[] = [];
+    const httpMethods = 'get|post|put|delete|patch|head|options|all';
+
+    // Step 1: Detect route groups and collect prefix mappings
+    // Pattern: variable.group('prefix', (paramName) => { ... })
+    const groupRe = /\b(\w+)\.group\s*\(\s*['"]([^'"]+)['"]\s*,\s*\((\w+)\)/g;
+    const groupPrefixMap = new Map<string, string>(); // paramName → prefix
+    let groupMatch;
+    while ((groupMatch = groupRe.exec(source)) !== null) {
+      const prefix = groupMatch[2];
+      const paramName = groupMatch[3];
+      groupPrefixMap.set(paramName, '/' + prefix.replace(/^\//, ''));
+    }
+
+    // Step 2: Extract basic routes: variable.METHOD('/path', handler)
+    const routeRe = new RegExp(
+      `\\b(\\w+)\\.(${httpMethods})\\s*\\(\\s*['\"]([^'\"]+)['\"]`,
+      'g'
+    );
+    // Skip: HTTP client libraries (API calls) and non-router objects
+    const skipVariables = new Set([
+      'axios', 'http', 'https', 'request', 'superagent', 'ky', 'got', 'fetch',  // HTTP clients
+      'ctx', 'context', 'req', 'res', 'response', 'headers', 'params', 'query',  // Request objects
+      'env', 'process', 'config', 'this', 'self', 'map', 'set', 'storage',       // Non-route objects
+      'cache', 'store', 'session', 'cookie', 'localStorage', 'sessionStorage',
+      'console', 'document', 'window', 'JSON', 'Object', 'Array', 'Math',
+    ]);
+
+    let match;
+    while ((match = routeRe.exec(source)) !== null) {
+      const variable = match[1];
+      if (skipVariables.has(variable)) continue;
+
+      const method = match[2].toUpperCase();
+      let routePath = match[3];
+
+      // Only match actual route paths (must start with / or be a relative path)
+      if (!routePath.startsWith('/')) continue;
+      const line = source.substring(0, match.index).split('\n').length;
+
+      // Check if the variable is a group parameter — prepend group prefix
+      const groupPrefix = groupPrefixMap.get(variable);
+      if (groupPrefix) {
+        routePath = groupPrefix + (routePath === '/' ? '' : routePath);
+        if (!routePath) routePath = '/';
+      }
+
+      // Extract handler name from what follows the path string
+      const afterPath = source.substring(match.index + match[0].length);
+
+      // Try to extract handler info: [Controller, 'method'], named function, or anonymous
+      let handlerName = 'anonymous';
+      // Pattern: , [Controller, 'method']
+      const controllerArrayMatch = afterPath.match(/^['"]\s*,\s*\[\s*(\w+)\s*,\s*['"](\w+)['"]\s*\]/);
+      if (controllerArrayMatch) {
+        handlerName = `${controllerArrayMatch[1]}.${controllerArrayMatch[2]}`;
+      } else {
+        // Pattern: , handlerName) or , handlerName,
+        const namedHandlerMatch = afterPath.match(/^['"]\s*,\s*(?:\[.*?\]\s*,\s*)?(\w+(?:\.\w+)?)\s*[,)]/);
+        if (namedHandlerMatch && !/^(?:async|function|\()/.test(namedHandlerMatch[1])) {
+          handlerName = namedHandlerMatch[1];
+        }
+      }
+
+      routes.push({ method, path: routePath, handlerName, line, file });
     }
 
     return routes;
@@ -2012,6 +2277,593 @@ export class TypeScriptExtractor implements LanguageExtractor {
    * Find the enclosing function/method declaration node and return its name + line.
    * Uses declaration line (not call-site) so generated IDs match function node IDs.
    */
+  // ─── NestJS Extraction (Stories 12.11-12.13) ──────────────────────
+
+  private extractNestJS(
+    source: string,
+    file: string,
+    nodes: GraphNode[],
+    edges: GraphEdge[]
+  ): void {
+    // Helper: find existing node by name+file and patch it, or create new
+    const patchOrCreate = (
+      name: string,
+      type: NodeType,
+      line: number,
+      signature: string,
+      metadata: Record<string, string>
+    ): GraphNode => {
+      const existing = nodes.find(n => n.name === name && n.file === file);
+      if (existing) {
+        existing.type = type;
+        existing.signature = signature;
+        existing.metadata = { ...existing.metadata, ...metadata };
+        return existing;
+      }
+      const id = generateNodeId(file, name, line);
+      const node: GraphNode = {
+        id, name, type, language: Language.TypeScript,
+        file, line, signature, repo: this.repoName, metadata,
+      };
+      nodes.push(node);
+      return node;
+    };
+
+    // Story 12.12: @Module() detection
+    const moduleRe = /@Module\s*\([^)]*\)\s*(?:export\s+)?class\s+(\w+)/g;
+    let match;
+    while ((match = moduleRe.exec(source)) !== null) {
+      const name = match[1];
+      const line = source.substring(0, match.index).split('\n').length;
+      patchOrCreate(name, NodeType.Module, line, `@Module() class ${name}`, { framework: 'nestjs' });
+    }
+
+    // Story 12.12: @Controller() detection with route extraction
+    // Match @Controller('prefix') or @Controller({ path: 'prefix', version: 'v' }) or @Controller()
+    // Allow other decorators (e.g. @UseGuards) between @Controller() and class keyword
+    const controllerBlockRe = /@Controller\s*\(\s*(?:'([^']*)'|"([^"]*)"|(\{[^}]*\}))?\s*\)[\s\S]*?(?:export\s+)?class\s+(\w+)\s*\{/g;
+    while ((match = controllerBlockRe.exec(source)) !== null) {
+      const prefix = match[1] ?? match[2] ?? '';
+      const objBlock = match[3];
+      const className = match[4];
+      const classStartIndex = match.index;
+      const classLine = source.substring(0, classStartIndex).split('\n').length;
+
+      let controllerPath = prefix;
+      let version = '';
+
+      // Parse object-style @Controller({ path: '...', version: '...' })
+      if (objBlock) {
+        const pathMatch = objBlock.match(/path:\s*['"]([^'"]*)['"]/);
+        const versionMatch = objBlock.match(/version:\s*['"]([^'"]*)['"]/);
+        if (pathMatch) controllerPath = pathMatch[1];
+        if (versionMatch) version = versionMatch[1];
+      }
+
+      // Build route prefix
+      let routePrefix = '';
+      if (version) {
+        routePrefix = `/v${version}`;
+      }
+      if (controllerPath) {
+        routePrefix += `/${controllerPath}`;
+      }
+
+      const controllerNode = patchOrCreate(
+        className, NodeType.Service, classLine,
+        `@Controller('${controllerPath}') class ${className}`,
+        { framework: 'nestjs', role: 'controller' }
+      );
+      const controllerId = controllerNode.id;
+
+      // Find the class body: from the opening { after class declaration to matching }
+      const classBodyStart = source.indexOf('{', classStartIndex + match[0].length - 1);
+      if (classBodyStart === -1) continue;
+
+      // Find matching closing brace
+      let braceCount = 1;
+      let pos = classBodyStart + 1;
+      while (pos < source.length && braceCount > 0) {
+        if (source[pos] === '{') braceCount++;
+        else if (source[pos] === '}') braceCount--;
+        pos++;
+      }
+      const classBody = source.substring(classBodyStart, pos);
+
+      // Extract HTTP method decorators
+      const httpMethodRe = /@(Get|Post|Put|Delete|Patch|Head|Options|All)\s*\(\s*(?:'([^']*)'|"([^"]*)")?\s*\)/g;
+      let methodMatch;
+      while ((methodMatch = httpMethodRe.exec(classBody)) !== null) {
+        const httpMethod = methodMatch[1].toUpperCase();
+        const subPath = methodMatch[2] ?? methodMatch[3] ?? '';
+
+        // Assemble full route path
+        let fullPath = routePrefix;
+        if (subPath) {
+          fullPath += `/${subPath}`;
+        }
+        // Ensure path starts with /
+        if (!fullPath.startsWith('/')) fullPath = '/' + fullPath;
+        // Normalize double slashes
+        fullPath = fullPath.replace(/\/+/g, '/');
+        // Convert NestJS :param to Express-style :param (already compatible)
+
+        const handlerName = `${httpMethod} ${fullPath}`;
+        const handlerLine = source.substring(0, classBodyStart + methodMatch.index).split('\n').length;
+        const handlerId = generateNodeId(file, handlerName, handlerLine);
+
+        nodes.push({
+          id: handlerId, name: handlerName, type: NodeType.Handler, language: Language.TypeScript,
+          file, line: handlerLine, signature: `@${methodMatch[1]}('${subPath}')`,
+          repo: this.repoName,
+          metadata: { framework: 'nestjs', method: httpMethod, path: fullPath },
+        });
+
+        // Create routes-to edge from controller to handler
+        edges.push({
+          source: controllerId, target: handlerId,
+          type: EdgeType.RoutesTo, protocol: Protocol.REST,
+          metadata: { method: httpMethod, path: fullPath },
+        });
+      }
+
+      // Story 12.13: Extract constructor DI from controller
+      this.extractConstructorDI(classBody, classBodyStart, source, file, controllerId, edges);
+    }
+
+    // Story 12.13: @Injectable() service detection
+    // Allow implements/extends clauses between class name and {
+    const injectableRe = /@Injectable\s*\(\s*\)\s*(?:export\s+)?class\s+(\w+)[\s\S]*?\{/g;
+    while ((match = injectableRe.exec(source)) !== null) {
+      const className = match[1];
+      const classStartIndex = match.index;
+      const classLine = source.substring(0, classStartIndex).split('\n').length;
+
+      // Skip if already processed as a controller
+      const existingNode = nodes.find(n => n.name === className && n.file === file);
+      if (existingNode && existingNode.metadata?.role === 'controller') continue;
+
+      const serviceNode = patchOrCreate(
+        className, NodeType.Service, classLine,
+        `@Injectable() class ${className}`,
+        { framework: 'nestjs', role: 'service' }
+      );
+      const serviceId = serviceNode.id;
+
+      // Find the class body
+      const classBodyStart = source.indexOf('{', classStartIndex + match[0].length - 1);
+      if (classBodyStart === -1) continue;
+
+      let braceCount = 1;
+      let pos = classBodyStart + 1;
+      while (pos < source.length && braceCount > 0) {
+        if (source[pos] === '{') braceCount++;
+        else if (source[pos] === '}') braceCount--;
+        pos++;
+      }
+      const classBody = source.substring(classBodyStart, pos);
+
+      // Extract constructor DI
+      this.extractConstructorDI(classBody, classBodyStart, source, file, serviceId, edges);
+    }
+
+    // Story 12.14: @Module() with imports/controllers/providers/exports parsing
+    const moduleDetailRe = /@Module\s*\((\{[\s\S]*?\})\s*\)\s*(?:export\s+)?class\s+(\w+)/g;
+    while ((match = moduleDetailRe.exec(source)) !== null) {
+      const moduleBody = match[1];
+      const moduleName = match[2];
+      const moduleLine = source.substring(0, match.index).split('\n').length;
+
+      // Check for @Global() decorator before @Module
+      const beforeModule = source.substring(0, match.index);
+      const isGlobal = /@Global\s*\(\s*\)\s*$/.test(beforeModule.trimEnd());
+
+      const moduleNode = patchOrCreate(
+        moduleName, NodeType.Module, moduleLine,
+        `@Module() class ${moduleName}`,
+        { framework: 'nestjs', ...(isGlobal ? { isGlobal: 'true' } : {}) }
+      );
+      const moduleId = moduleNode.id;
+
+      // Parse array fields from module decorator body
+      const parseArrayField = (field: string): string[] => {
+        const re = new RegExp(`${field}\\s*:\\s*\\[([^\\]]*)]`);
+        const m = moduleBody.match(re);
+        if (!m) return [];
+        return m[1].split(',').map(s => s.trim()).filter(Boolean);
+      };
+
+      const imports = parseArrayField('imports');
+      const controllers = parseArrayField('controllers');
+      const providers = parseArrayField('providers');
+      const exports = parseArrayField('exports');
+
+      // Store exports in module node metadata
+      if (exports.length > 0) {
+        const moduleNode = nodes.find(n => n.id === moduleId);
+        if (moduleNode) {
+          moduleNode.metadata = { ...moduleNode.metadata, exports: exports.join(',') };
+        }
+      }
+
+      for (const imp of imports) {
+        edges.push({
+          source: moduleId, target: imp,
+          type: EdgeType.Imports, protocol: Protocol.Internal,
+          metadata: { relationship: 'module-import' },
+        });
+      }
+
+      for (const ctrl of controllers) {
+        edges.push({
+          source: moduleId, target: ctrl,
+          type: EdgeType.Imports, protocol: Protocol.Internal,
+          metadata: { relationship: 'provides' },
+        });
+      }
+
+      for (const prov of providers) {
+        edges.push({
+          source: moduleId, target: prov,
+          type: EdgeType.Imports, protocol: Protocol.Internal,
+          metadata: { relationship: 'provides' },
+        });
+      }
+    }
+
+    // Story 12.15: @UseGuards and @UseInterceptors
+    // Re-scan controller blocks to find class-level and method-level guards/interceptors
+    const controllerBlockRe2 = /@Controller\s*\(\s*(?:'([^']*)'|"([^"]*)"|(\{[^}]*\}))?\s*\)[\s\S]*?(?:export\s+)?class\s+(\w+)\s*\{/g;
+    while ((match = controllerBlockRe2.exec(source)) !== null) {
+      const className = match[4];
+      const classStartIndex = match.index;
+
+      // Find the class body
+      const classBodyStart = source.indexOf('{', classStartIndex + match[0].length - 1);
+      if (classBodyStart === -1) continue;
+      let braceCount = 1;
+      let pos = classBodyStart + 1;
+      while (pos < source.length && braceCount > 0) {
+        if (source[pos] === '{') braceCount++;
+        else if (source[pos] === '}') braceCount--;
+        pos++;
+      }
+      const classBody = source.substring(classBodyStart, pos);
+
+      // Check the area BEFORE class body for class-level decorators
+      const beforeClass = source.substring(0, classBodyStart);
+
+      // Class-level @UseGuards
+      const classGuardRe = /@UseGuards\s*\(\s*(\w+)\s*\)/g;
+      let guardMatch;
+      const classGuards: string[] = [];
+      // Look in the decorator area (between last non-decorator line and class declaration)
+      const decoratorArea = beforeClass.substring(Math.max(0, beforeClass.lastIndexOf('\n@')));
+      while ((guardMatch = classGuardRe.exec(decoratorArea)) !== null) {
+        classGuards.push(guardMatch[1]);
+      }
+
+      // Class-level @UseInterceptors
+      const classInterceptorRe = /@UseInterceptors\s*\(\s*(\w+)\s*\)/g;
+      let interceptorMatch;
+      const classInterceptors: string[] = [];
+      while ((interceptorMatch = classInterceptorRe.exec(decoratorArea)) !== null) {
+        classInterceptors.push(interceptorMatch[1]);
+      }
+
+      // Create guard nodes for class-level guards
+      for (const guardName of classGuards) {
+        const existingGuard = nodes.find(n => n.name === guardName);
+        if (!existingGuard) {
+          const guardLine = source.substring(0, match.index).split('\n').length;
+          patchOrCreate(guardName, NodeType.Guard, guardLine, `class ${guardName}`, { framework: 'nestjs' });
+        }
+      }
+
+      // Create interceptor nodes for class-level interceptors
+      for (const intName of classInterceptors) {
+        const existingInt = nodes.find(n => n.name === intName);
+        if (!existingInt) {
+          const intLine = source.substring(0, match.index).split('\n').length;
+          patchOrCreate(intName, NodeType.Interceptor, intLine, `class ${intName}`, { framework: 'nestjs' });
+        }
+      }
+
+      // Find all handler methods in this controller to apply class-level guards/interceptors
+      // First, collect all HTTP method decorator positions and the surrounding decorator areas
+      const httpMethodRe2 = /@(Get|Post|Put|Delete|Patch|Head|Options|All)\s*\(\s*(?:'([^']*)'|"([^"]*)")?\s*\)/g;
+      let methodMatch2;
+      const methodPositions: { index: number; endIndex: number; httpMethod: string; subPath: string }[] = [];
+      while ((methodMatch2 = httpMethodRe2.exec(classBody)) !== null) {
+        methodPositions.push({
+          index: methodMatch2.index,
+          endIndex: methodMatch2.index + methodMatch2[0].length,
+          httpMethod: methodMatch2[1].toUpperCase(),
+          subPath: methodMatch2[2] ?? methodMatch2[3] ?? '',
+        });
+      }
+
+      for (let i = 0; i < methodPositions.length; i++) {
+        const mp = methodPositions[i];
+
+        // Re-derive the route prefix from the controller match
+        const controllerPrefix = match[1] ?? match[2] ?? '';
+        let fullPath = controllerPrefix ? `/${controllerPrefix}` : '';
+        if (mp.subPath) fullPath += `/${mp.subPath}`;
+        if (!fullPath.startsWith('/')) fullPath = '/' + fullPath;
+        fullPath = fullPath.replace(/\/+/g, '/');
+
+        const handlerName = `${mp.httpMethod} ${fullPath}`;
+        const handlerNode = nodes.find(n => n.name === handlerName && n.file === file);
+        if (!handlerNode) continue;
+
+        // Determine the decorator area for this method:
+        // From the current HTTP method decorator to the next HTTP method decorator (or end of class body)
+        // This captures decorators that appear between the HTTP verb and the method name (e.g. @UseInterceptors)
+        const nextStart = i < methodPositions.length - 1 ? methodPositions[i + 1].index : classBody.length;
+        const methodDecoratorArea = classBody.substring(mp.index, nextStart);
+
+        // Method-level @UseGuards
+        const methodGuardRe = /@UseGuards\s*\(\s*(\w+)\s*\)/g;
+        let mg;
+        while ((mg = methodGuardRe.exec(methodDecoratorArea)) !== null) {
+          const gName = mg[1];
+          const existingG = nodes.find(n => n.name === gName);
+          if (!existingG) {
+            const gLine = source.substring(0, classBodyStart + mp.index).split('\n').length;
+            patchOrCreate(gName, NodeType.Guard, gLine, `class ${gName}`, { framework: 'nestjs' });
+          }
+          const guardNode = nodes.find(n => n.name === gName);
+          if (guardNode) {
+            edges.push({
+              source: handlerNode.id, target: guardNode.id,
+              type: EdgeType.Calls, protocol: Protocol.Internal,
+              metadata: { relationship: 'guards' },
+            });
+          }
+        }
+
+        // Method-level @UseInterceptors
+        const methodInterceptorRe = /@UseInterceptors\s*\(\s*(\w+)\s*\)/g;
+        let mi;
+        while ((mi = methodInterceptorRe.exec(methodDecoratorArea)) !== null) {
+          const iName = mi[1];
+          const existingI = nodes.find(n => n.name === iName);
+          if (!existingI) {
+            const iLine = source.substring(0, classBodyStart + mp.index).split('\n').length;
+            patchOrCreate(iName, NodeType.Interceptor, iLine, `class ${iName}`, { framework: 'nestjs' });
+          }
+          const intNode = nodes.find(n => n.name === iName);
+          if (intNode) {
+            edges.push({
+              source: handlerNode.id, target: intNode.id,
+              type: EdgeType.Calls, protocol: Protocol.Internal,
+              metadata: { relationship: 'intercepts' },
+            });
+          }
+        }
+
+        // Apply class-level guards to ALL handler methods
+        for (const guardName of classGuards) {
+          const guardNode = nodes.find(n => n.name === guardName);
+          if (guardNode) {
+            edges.push({
+              source: handlerNode.id, target: guardNode.id,
+              type: EdgeType.Calls, protocol: Protocol.Internal,
+              metadata: { relationship: 'guards' },
+            });
+          }
+        }
+
+        // Apply class-level interceptors to ALL handler methods
+        for (const intName of classInterceptors) {
+          const intNode = nodes.find(n => n.name === intName);
+          if (intNode) {
+            edges.push({
+              source: handlerNode.id, target: intNode.id,
+              type: EdgeType.Calls, protocol: Protocol.Internal,
+              metadata: { relationship: 'intercepts' },
+            });
+          }
+        }
+      }
+    }
+
+    // Story 12.16: @WebSocketGateway detection
+    const wsGatewayRe = /@WebSocketGateway\s*\(([^)]*)\)\s*(?:export\s+)?class\s+(\w+)\s*\{/g;
+    while ((match = wsGatewayRe.exec(source)) !== null) {
+      const args = match[1];
+      const gatewayName = match[2];
+      const gatewayStartIndex = match.index;
+      const gatewayLine = source.substring(0, gatewayStartIndex).split('\n').length;
+
+      // Parse port and namespace from args
+      const portMatch = args.match(/^(\d+)/);
+      const nsMatch = args.match(/namespace:\s*['"]([^'"]*)['"]/);
+      const port = portMatch ? portMatch[1] : '';
+      const namespace = nsMatch ? nsMatch[1] : '';
+
+      const gatewayNode = patchOrCreate(
+        gatewayName, NodeType.Handler, gatewayLine,
+        `@WebSocketGateway(${args.trim()}) class ${gatewayName}`,
+        { framework: 'nestjs', protocol: 'WebSocket', ...(port ? { port } : {}), ...(namespace ? { namespace } : {}) }
+      );
+      const gatewayId = gatewayNode.id;
+
+      // Find class body
+      const classBodyStart = source.indexOf('{', gatewayStartIndex + match[0].length - 1);
+      if (classBodyStart === -1) continue;
+      let braceCount = 1;
+      let pos = classBodyStart + 1;
+      while (pos < source.length && braceCount > 0) {
+        if (source[pos] === '{') braceCount++;
+        else if (source[pos] === '}') braceCount--;
+        pos++;
+      }
+      const classBody = source.substring(classBodyStart, pos);
+
+      // Extract @SubscribeMessage handlers
+      const subMsgRe = /@SubscribeMessage\s*\(\s*['"]([^'"]*)['"]\s*\)/g;
+      let subMatch;
+      while ((subMatch = subMsgRe.exec(classBody)) !== null) {
+        const eventName = subMatch[1];
+        const handlerLine = source.substring(0, classBodyStart + subMatch.index).split('\n').length;
+        const handlerName = `WS ${eventName}`;
+        const handlerId = generateNodeId(file, handlerName, handlerLine);
+
+        nodes.push({
+          id: handlerId, name: handlerName, type: NodeType.Handler, language: Language.TypeScript,
+          file, line: handlerLine, signature: `@SubscribeMessage('${eventName}')`,
+          repo: this.repoName,
+          metadata: { framework: 'nestjs', event: eventName, protocol: 'WebSocket' },
+        });
+
+        edges.push({
+          source: gatewayId, target: handlerId,
+          type: EdgeType.RoutesTo, protocol: Protocol.WebSocket,
+          metadata: { event: eventName },
+        });
+      }
+    }
+
+    // Story 12.16: @MessagePattern detection
+    const msgPatternRe = /@MessagePattern\s*\(\s*(?:\{\s*cmd:\s*['"]([^'"]*)['"]\s*\}|['"]([^'"]*)['"]\s*)\)/g;
+    while ((match = msgPatternRe.exec(source)) !== null) {
+      const patternName = match[1] ?? match[2];
+      const handlerLine = source.substring(0, match.index).split('\n').length;
+      const handlerName = `MSG ${patternName}`;
+      const handlerId = generateNodeId(file, handlerName, handlerLine);
+
+      // Find the method name after the decorator
+      const afterDecorator = source.substring(match.index + match[0].length);
+      const methodNameMatch = afterDecorator.match(/\s*(\w+)\s*\(/);
+      const methodSig = methodNameMatch ? methodNameMatch[1] : handlerName;
+
+      nodes.push({
+        id: handlerId, name: handlerName, type: NodeType.Handler, language: Language.TypeScript,
+        file, line: handlerLine, signature: `@MessagePattern('${patternName}') ${methodSig}()`,
+        repo: this.repoName,
+        metadata: { framework: 'nestjs', pattern: patternName, protocol: 'MessageBus' },
+      });
+
+      // Create routes-to edge for MessagePattern
+      edges.push({
+        source: handlerId, target: handlerId,
+        type: EdgeType.RoutesTo, protocol: Protocol.MessageBus,
+        metadata: { pattern: patternName, event: `cmd:${patternName}` },
+      });
+    }
+
+    // Story 12.16: @EventPattern detection
+    const eventPatternRe = /@EventPattern\s*\(\s*['"]([^'"]*)['"]\s*\)/g;
+    while ((match = eventPatternRe.exec(source)) !== null) {
+      const eventName = match[1];
+      const handlerLine = source.substring(0, match.index).split('\n').length;
+      const handlerName = `EVT ${eventName}`;
+      const handlerId = generateNodeId(file, handlerName, handlerLine);
+
+      // Find the method name after the decorator
+      const afterDecorator = source.substring(match.index + match[0].length);
+      const methodNameMatch = afterDecorator.match(/\s*(\w+)\s*\(/);
+      const methodSig = methodNameMatch ? methodNameMatch[1] : handlerName;
+
+      nodes.push({
+        id: handlerId, name: handlerName, type: NodeType.Handler, language: Language.TypeScript,
+        file, line: handlerLine, signature: `@EventPattern('${eventName}') ${methodSig}()`,
+        repo: this.repoName,
+        metadata: { framework: 'nestjs', event: eventName, protocol: 'MessageBus' },
+      });
+
+      // Create routes-to edge for EventPattern
+      edges.push({
+        source: handlerId, target: handlerId,
+        type: EdgeType.RoutesTo, protocol: Protocol.MessageBus,
+        metadata: { pattern: eventName, event: eventName },
+      });
+    }
+  }
+
+  /**
+   * Extract constructor dependency injection parameters and create calls edges.
+   * Handles: constructor(private bookingService: BookingService, @Inject('TOKEN') private token: TokenType)
+   */
+  private extractConstructorDI(
+    classBody: string,
+    classBodyOffset: number,
+    source: string,
+    file: string,
+    sourceNodeId: string,
+    edges: GraphEdge[]
+  ): void {
+    // Use balanced paren matching for constructor params (handles @Inject('TOKEN') inside)
+    const ctorStart = classBody.indexOf('constructor');
+    if (ctorStart === -1) return;
+    const parenStart = classBody.indexOf('(', ctorStart);
+    if (parenStart === -1) return;
+    let depth = 0;
+    let parenEnd = -1;
+    for (let i = parenStart; i < classBody.length; i++) {
+      if (classBody[i] === '(') depth++;
+      if (classBody[i] === ')') { depth--; if (depth === 0) { parenEnd = i; break; } }
+    }
+    if (parenEnd === -1) return;
+
+    const params = classBody.substring(parenStart + 1, parenEnd);
+    if (!params.trim()) return;
+
+    // Parse each parameter: handle @Inject('TOKEN') private name: Type patterns
+    // Split by comma, but be careful with generic types
+    const paramList = this.splitConstructorParams(params);
+
+    for (const param of paramList) {
+      const trimmed = param.trim();
+      if (!trimmed) continue;
+
+      // Check for @Inject('TOKEN') pattern
+      const injectMatch = trimmed.match(/@Inject\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+
+      // Extract type annotation: the last `: TypeName` in the parameter
+      const typeMatch = trimmed.match(/:\s*(\w+)\s*$/);
+      if (!typeMatch && !injectMatch) continue;
+
+      const targetName = typeMatch ? typeMatch[1] : (injectMatch ? injectMatch[1] : '');
+      if (!targetName) continue;
+
+      const ctorLine = source.substring(0, classBodyOffset).split('\n').length;
+
+      edges.push({
+        source: sourceNodeId, target: targetName,
+        type: EdgeType.Imports, protocol: Protocol.Internal,
+        callLine: ctorLine,
+        metadata: {
+          relationship: 'injects',
+          ...(injectMatch ? { token: injectMatch[1] } : {}),
+        },
+      });
+    }
+  }
+
+  /**
+   * Split constructor parameters, handling nested generics like Map<string, number>
+   */
+  private splitConstructorParams(params: string): string[] {
+    const result: string[] = [];
+    let depth = 0;
+    let current = '';
+    for (const ch of params) {
+      if (ch === '<') depth++;
+      else if (ch === '>') depth--;
+      else if (ch === ',' && depth === 0) {
+        result.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    if (current.trim()) result.push(current);
+    return result;
+  }
+
   private findEnclosingFuncInfo(node: Parser.SyntaxNode): { name: string; line: number } | null {
     let current = node.parent;
     while (current) {

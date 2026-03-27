@@ -214,6 +214,9 @@ function generateMarkdown(map: SystemMap, techStack: TechStackInfo | null, gitCt
     worker: 'Workers',
     entity: 'Entities',
     model: 'Models',
+    module: 'Modules',
+    guard: 'Guards',
+    interceptor: 'Interceptors',
   };
 
   lines.push('## Architecture Summary');

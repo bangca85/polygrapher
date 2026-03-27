@@ -1,10 +1,10 @@
 # System Map: simple-api
 
-Generated: 2026-03-26T11:20:49.317Z
+Generated: 2026-03-27T01:51:00.936Z
 Languages: go
 Nodes: 4 | Edges: 3
 Branch: main
-Commit: `6fd8a9e` — "init project with go extract"
+Commit: `962d2b9` — "0.4.1"
 
 ---
 

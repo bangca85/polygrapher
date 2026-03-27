@@ -4,8 +4,8 @@
     "languages": [
       "go"
     ],
-    "generatedAt": "2026-03-26T11:20:49.317Z",
-    "polygrapher": "0.3.0"
+    "generatedAt": "2026-03-27T01:51:00.936Z",
+    "polygrapher": "0.4.1"
   },
   "nodes": [
     {

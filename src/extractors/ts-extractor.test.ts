@@ -717,4 +717,472 @@ describe('TypeScriptExtractor', () => {
       expect(envEdge).toBeDefined();
     });
   });
+
+  // ─── Story 12.11: NestJS Detection ──────────────────────────────────
+  describe('NestJS detection (Story 12.11)', () => {
+    it('detects hasNest from @nestjs/common in package.json', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/app.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      // If NestJS is detected, controller extraction should produce nodes
+      const controllerNode = result.nodes.find(n => n.name === 'AppController');
+      expect(controllerNode).toBeDefined();
+      expect(controllerNode!.metadata?.framework).toBe('nestjs');
+    });
+
+    it('does not detect NestJS in non-NestJS project', async () => {
+      const root = path.join(TS_FIXTURES, 'react-vanilla');
+      const files = [path.join(root, 'src/services/api.ts')];
+      const result = await extractor.parse(files, root);
+
+      // Should not produce NestJS-specific nodes
+      const nestNodes = result.nodes.filter(n => n.metadata?.framework === 'nestjs');
+      expect(nestNodes.length).toBe(0);
+    });
+  });
+
+  // ─── Story 12.12: NestJS Controller + Route Extraction ──────────────
+  describe('NestJS Controller + Route extraction (Story 12.12)', () => {
+    it('extracts @Controller class as service node', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const controller = result.nodes.find(n => n.name === 'BookingController');
+      expect(controller).toBeDefined();
+      expect(controller!.type).toBe('service');
+      expect(controller!.metadata?.role).toBe('controller');
+    });
+
+    it('assembles full route path from @Controller prefix + @Get/:id', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const getAll = result.nodes.find(n => n.name === 'GET /booking');
+      expect(getAll).toBeDefined();
+      expect(getAll!.type).toBe('handler');
+
+      const getOne = result.nodes.find(n => n.name === 'GET /booking/:id');
+      expect(getOne).toBeDefined();
+
+      const post = result.nodes.find(n => n.name === 'POST /booking');
+      expect(post).toBeDefined();
+
+      const put = result.nodes.find(n => n.name === 'PUT /booking/:id');
+      expect(put).toBeDefined();
+
+      const del = result.nodes.find(n => n.name === 'DELETE /booking/:id');
+      expect(del).toBeDefined();
+    });
+
+    it('handles empty @Controller() prefix', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/app.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const getHello = result.nodes.find(n => n.name === 'GET /');
+      expect(getHello).toBeDefined();
+      expect(getHello!.type).toBe('handler');
+    });
+
+    it('handles versioned @Controller({ path, version })', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/users/users.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const getAll = result.nodes.find(n => n.name === 'GET /v1/users');
+      expect(getAll).toBeDefined();
+      expect(getAll!.type).toBe('handler');
+      expect(getAll!.metadata?.path).toBe('/v1/users');
+    });
+
+    it('creates routes-to edges from controller to handlers', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const routeEdges = result.edges.filter(e => e.type === 'routes-to');
+      expect(routeEdges.length).toBe(5); // GET, GET/:id, POST, PUT/:id, DELETE/:id
+
+      const controller = result.nodes.find(n => n.name === 'BookingController');
+      for (const edge of routeEdges) {
+        expect(edge.source).toBe(controller!.id);
+        expect(edge.protocol).toBe('REST');
+      }
+    });
+
+    it('extracts @Module class as module node', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/app.module.ts')];
+      const result = await extractor.parse(files, root);
+
+      const moduleNode = result.nodes.find(n => n.name === 'AppModule');
+      expect(moduleNode).toBeDefined();
+      expect(moduleNode!.type).toBe('module');
+      expect(moduleNode!.metadata?.framework).toBe('nestjs');
+    });
+  });
+
+  // ─── Story 12.13: NestJS Service + DI ───────────────────────────────
+  describe('NestJS Service + DI (Story 12.13)', () => {
+    it('extracts @Injectable() as service node', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/booking.service.ts')];
+      const result = await extractor.parse(files, root);
+
+      const service = result.nodes.find(n => n.name === 'BookingService');
+      expect(service).toBeDefined();
+      expect(service!.type).toBe('service');
+      expect(service!.metadata?.role).toBe('service');
+    });
+
+    it('creates constructor DI edges', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/booking.service.ts')];
+      const result = await extractor.parse(files, root);
+
+      const service = result.nodes.find(n => n.name === 'BookingService');
+      const diEdges = result.edges.filter(
+        e => e.source === service!.id && e.type === 'imports' && e.metadata?.relationship === 'injects'
+      );
+      expect(diEdges.length).toBe(1);
+
+    });
+
+    it('handles multiple constructor parameters', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [
+        path.join(root, 'src/booking/booking.controller.ts'),
+      ];
+      const result = await extractor.parse(files, root);
+
+      const controller = result.nodes.find(n => n.name === 'BookingController');
+      const diEdges = result.edges.filter(
+        e => e.source === controller!.id && e.type === 'imports' && e.metadata?.relationship === 'injects'
+      );
+      expect(diEdges.length).toBe(1);
+      expect(diEdges[0].target).toBe('BookingService');
+    });
+
+    it('extracts @Inject(TOKEN) constructor DI with token metadata', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/cache.service.ts')];
+      const result = await extractor.parse(files, root);
+
+      const service = result.nodes.find(n => n.name === 'CacheService');
+      expect(service).toBeDefined();
+
+      const diEdge = result.edges.find(
+        e => e.source === service!.id && e.type === 'imports' && e.metadata?.relationship === 'injects'
+      );
+      expect(diEdge).toBeDefined();
+      expect(diEdge!.metadata?.token).toBe('CACHE_MANAGER');
+    });
+
+    it('extracts @Injectable repository as service node', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-basic');
+      const files = [path.join(root, 'src/booking/booking.repository.ts')];
+      const result = await extractor.parse(files, root);
+
+      const repo = result.nodes.find(n => n.name === 'BookingRepository');
+      expect(repo).toBeDefined();
+      expect(repo!.type).toBe('service');
+    });
+  });
+
+  // ─── Story 12.14: NestJS Module Graph ──────────────────────────────
+  describe('NestJS Module Graph (Story 12.14)', () => {
+    it('creates module nodes from @Module() decorator', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-modules');
+      const files = [
+        path.join(root, 'src/app.module.ts'),
+        path.join(root, 'src/booking/booking.module.ts'),
+        path.join(root, 'src/users/users.module.ts'),
+      ];
+      const result = await extractor.parse(files, root);
+
+      const appModule = result.nodes.find(n => n.name === 'AppModule');
+      expect(appModule).toBeDefined();
+      expect(appModule!.type).toBe('module');
+      expect(appModule!.metadata?.framework).toBe('nestjs');
+
+      const bookingModule = result.nodes.find(n => n.name === 'BookingModule');
+      expect(bookingModule).toBeDefined();
+      expect(bookingModule!.type).toBe('module');
+
+      const userModule = result.nodes.find(n => n.name === 'UserModule');
+      expect(userModule).toBeDefined();
+      expect(userModule!.type).toBe('module');
+    });
+
+    it('creates module-import edges from imports array', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-modules');
+      const files = [path.join(root, 'src/app.module.ts')];
+      const result = await extractor.parse(files, root);
+
+      const appModule = result.nodes.find(n => n.name === 'AppModule');
+      const importEdges = result.edges.filter(
+        e => e.source === appModule!.id && e.metadata?.relationship === 'module-import'
+      );
+      expect(importEdges.length).toBe(2);
+      const importTargets = importEdges.map(e => e.target);
+      expect(importTargets).toContain('BookingModule');
+      expect(importTargets).toContain('UserModule');
+    });
+
+    it('creates provides edges for controllers and providers', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-modules');
+      const files = [path.join(root, 'src/app.module.ts')];
+      const result = await extractor.parse(files, root);
+
+      const appModule = result.nodes.find(n => n.name === 'AppModule');
+      const providesEdges = result.edges.filter(
+        e => e.source === appModule!.id && e.metadata?.relationship === 'provides'
+      );
+      expect(providesEdges.length).toBe(2); // AppController + AppService
+      const targets = providesEdges.map(e => e.target);
+      expect(targets).toContain('AppController');
+      expect(targets).toContain('AppService');
+    });
+
+    it('detects @Global() decorator as isGlobal metadata', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-modules');
+      const files = [path.join(root, 'src/users/users.module.ts')];
+      const result = await extractor.parse(files, root);
+
+      const userModule = result.nodes.find(n => n.name === 'UserModule');
+      expect(userModule).toBeDefined();
+      expect(userModule!.metadata?.isGlobal).toBe('true');
+    });
+
+    it('non-global modules do not have isGlobal metadata', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-modules');
+      const files = [path.join(root, 'src/booking/booking.module.ts')];
+      const result = await extractor.parse(files, root);
+
+      const bookingModule = result.nodes.find(n => n.name === 'BookingModule');
+      expect(bookingModule).toBeDefined();
+      expect(bookingModule!.metadata?.isGlobal).toBeUndefined();
+    });
+  });
+
+  // ─── Story 12.15: NestJS Guards + Interceptors ─────────────────────
+  describe('NestJS Guards + Interceptors (Story 12.15)', () => {
+    it('creates guard node from @UseGuards', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-guards');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const guardNode = result.nodes.find(n => n.name === 'AuthGuard');
+      expect(guardNode).toBeDefined();
+      expect(guardNode!.type).toBe('guard');
+    });
+
+    it('class-level @UseGuards creates guard edges for ALL handler methods', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-guards');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const guardNode = result.nodes.find(n => n.name === 'AuthGuard');
+      // Direction: handler → guard (handler uses guard)
+      const guardEdges = result.edges.filter(
+        e => e.target === guardNode!.id && e.metadata?.relationship === 'guards'
+      );
+      // Class-level guard applies to both findAll (GET /booking) and findOne (GET /booking/:id)
+      expect(guardEdges.length).toBe(2);
+    });
+
+    it('creates interceptor node from @UseInterceptors', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-guards');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const interceptorNode = result.nodes.find(n => n.name === 'LoggingInterceptor');
+      expect(interceptorNode).toBeDefined();
+      expect(interceptorNode!.type).toBe('interceptor');
+    });
+
+    it('method-level @UseInterceptors creates intercepts edge only for that method', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-guards');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const interceptorNode = result.nodes.find(n => n.name === 'LoggingInterceptor');
+      // Direction: handler → interceptor (handler uses interceptor)
+      const interceptEdges = result.edges.filter(
+        e => e.target === interceptorNode!.id && e.metadata?.relationship === 'intercepts'
+      );
+      // Only findAll has @UseInterceptors(LoggingInterceptor)
+      expect(interceptEdges.length).toBe(1);
+      const sourceNode = result.nodes.find(n => n.id === interceptEdges[0].source);
+      expect(sourceNode!.name).toBe('GET /booking');
+    });
+
+    it('guard and interceptor nodes from @Injectable files are typed correctly', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-guards');
+      const files = [
+        path.join(root, 'src/auth/auth.guard.ts'),
+        path.join(root, 'src/logging/logging.interceptor.ts'),
+      ];
+      const result = await extractor.parse(files, root);
+
+      // @Injectable() classes are detected as service nodes (without context of usage)
+      const authGuard = result.nodes.find(n => n.name === 'AuthGuard');
+      expect(authGuard).toBeDefined();
+      expect(authGuard!.type).toBe('service');
+
+      const loggingInterceptor = result.nodes.find(n => n.name === 'LoggingInterceptor');
+      expect(loggingInterceptor).toBeDefined();
+      expect(loggingInterceptor!.type).toBe('service');
+    });
+  });
+
+  // ─── Story 12.16: NestJS WebSocket + Microservices ─────────────────
+  describe('NestJS WebSocket + Microservices (Story 12.16)', () => {
+    it('detects @WebSocketGateway as handler node', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-websocket');
+      const files = [path.join(root, 'src/events/events.gateway.ts')];
+      const result = await extractor.parse(files, root);
+
+      const gateway = result.nodes.find(n => n.name === 'EventsGateway');
+      expect(gateway).toBeDefined();
+      expect(gateway!.type).toBe('handler');
+      expect(gateway!.metadata?.protocol).toBe('WebSocket');
+      expect(gateway!.metadata?.namespace).toBe('events');
+      expect(gateway!.metadata?.port).toBe('3001');
+    });
+
+    it('extracts @SubscribeMessage handlers with WebSocket protocol', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-websocket');
+      const files = [path.join(root, 'src/events/events.gateway.ts')];
+      const result = await extractor.parse(files, root);
+
+      const wsHandlers = result.nodes.filter(n => n.name.startsWith('WS '));
+      expect(wsHandlers.length).toBe(2);
+
+      const bookingCreated = result.nodes.find(n => n.name === 'WS booking.created');
+      expect(bookingCreated).toBeDefined();
+      expect(bookingCreated!.type).toBe('handler');
+      expect(bookingCreated!.metadata?.protocol).toBe('WebSocket');
+
+      const bookingUpdated = result.nodes.find(n => n.name === 'WS booking.updated');
+      expect(bookingUpdated).toBeDefined();
+    });
+
+    it('creates routes-to edges from gateway to WS handlers', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-websocket');
+      const files = [path.join(root, 'src/events/events.gateway.ts')];
+      const result = await extractor.parse(files, root);
+
+      const gateway = result.nodes.find(n => n.name === 'EventsGateway');
+      const wsEdges = result.edges.filter(
+        e => e.source === gateway!.id && e.type === 'routes-to' && e.protocol === 'WebSocket'
+      );
+      expect(wsEdges.length).toBe(2);
+    });
+
+    it('extracts @MessagePattern handlers with MessageBus protocol', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-microservice');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const msgHandler = result.nodes.find(n => n.name === 'MSG get_booking');
+      expect(msgHandler).toBeDefined();
+      expect(msgHandler!.type).toBe('handler');
+      expect(msgHandler!.metadata?.protocol).toBe('MessageBus');
+
+      // routes-to edge with MessageBus protocol
+      const msgEdge = result.edges.find(
+        e => e.type === 'routes-to' && e.protocol === 'MessageBus' && e.metadata?.pattern === 'get_booking'
+      );
+      expect(msgEdge).toBeDefined();
+    });
+
+    it('extracts @EventPattern handlers with MessageBus protocol + routes-to edge', async () => {
+      const root = path.join(TS_FIXTURES, 'nestjs-microservice');
+      const files = [path.join(root, 'src/booking/booking.controller.ts')];
+      const result = await extractor.parse(files, root);
+
+      const evtHandler = result.nodes.find(n => n.name === 'EVT booking_created');
+      expect(evtHandler).toBeDefined();
+      expect(evtHandler!.type).toBe('handler');
+
+      // routes-to edge with MessageBus protocol
+      const evtEdge = result.edges.find(
+        e => e.type === 'routes-to' && e.protocol === 'MessageBus' && e.metadata?.event === 'booking_created'
+      );
+      expect(evtEdge).toBeDefined();
+    });
+  });
+
+  describe('Express-like route extraction', () => {
+    it('extracts router.get/post/put/delete routes', async () => {
+      const root = path.join(TS_FIXTURES, 'express-app');
+      const files = [
+        path.join(root, 'src/routes.ts'),
+        path.join(root, 'src/controllers/userController.ts'),
+      ];
+      const result = await extractor.parse(files, root);
+
+      const routeEdges = result.edges.filter(e => e.type === 'routes-to');
+
+      const getRoute = routeEdges.find(e => e.metadata?.method === 'GET' && e.metadata?.path === '/users');
+      expect(getRoute).toBeDefined();
+
+      const postRoute = routeEdges.find(e => e.metadata?.method === 'POST' && e.metadata?.path === '/users');
+      expect(postRoute).toBeDefined();
+
+      const putRoute = routeEdges.find(e => e.metadata?.method === 'PUT' && e.metadata?.path === '/users/:id');
+      expect(putRoute).toBeDefined();
+
+      const deleteRoute = routeEdges.find(e => e.metadata?.method === 'DELETE' && e.metadata?.path === '/users/:id');
+      expect(deleteRoute).toBeDefined();
+    });
+
+    it('extracts route with path parameters', async () => {
+      const root = path.join(TS_FIXTURES, 'express-app');
+      const files = [path.join(root, 'src/routes.ts')];
+      const result = await extractor.parse(files, root);
+
+      const routeEdges = result.edges.filter(e => e.type === 'routes-to');
+      const paramRoute = routeEdges.find(e => e.metadata?.path === '/users/:id' && e.metadata?.method === 'GET');
+      expect(paramRoute).toBeDefined();
+    });
+
+    it('extracts Gaman-style r.get routes', async () => {
+      const root = path.join(TS_FIXTURES, 'gaman-app');
+      const files = [path.join(root, 'src/router.ts')];
+      const result = await extractor.parse(files, root);
+
+      const routeEdges = result.edges.filter(e => e.type === 'routes-to');
+
+      const rootRoute = routeEdges.find(e => e.metadata?.path === '/' && e.metadata?.method === 'GET');
+      expect(rootRoute).toBeDefined();
+
+      const usersRoute = routeEdges.find(e => e.metadata?.path === '/users/:id' && e.metadata?.method === 'GET');
+      expect(usersRoute).toBeDefined();
+
+      const itemsRoute = routeEdges.find(e => e.metadata?.path === '/items' && e.metadata?.method === 'POST');
+      expect(itemsRoute).toBeDefined();
+
+      const pingRoute = routeEdges.find(e => e.metadata?.path === '/ping' && e.metadata?.method === 'GET');
+      expect(pingRoute).toBeDefined();
+    });
+
+    it('resolves group prefix for nested routes', async () => {
+      const root = path.join(TS_FIXTURES, 'gaman-app');
+      const files = [path.join(root, 'src/router.ts')];
+      const result = await extractor.parse(files, root);
+
+      const routeEdges = result.edges.filter(e => e.type === 'routes-to');
+
+      const v1Hello = routeEdges.find(e => e.metadata?.path === '/v1/hello' && e.metadata?.method === 'GET');
+      expect(v1Hello).toBeDefined();
+
+      const v1Data = routeEdges.find(e => e.metadata?.path === '/v1/data' && e.metadata?.method === 'POST');
+      expect(v1Data).toBeDefined();
+    });
+  });
 });

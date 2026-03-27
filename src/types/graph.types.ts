@@ -11,6 +11,9 @@ export enum NodeType {
   Entity = 'entity',
   Bloc = 'bloc',
   Model = 'model',
+  Module = 'module',
+  Guard = 'guard',
+  Interceptor = 'interceptor',
 }
 
 export enum EdgeType {
@@ -23,6 +26,8 @@ export enum Protocol {
   REST = 'REST',
   GRPC = 'gRPC',
   Internal = 'internal',
+  WebSocket = 'WebSocket',
+  MessageBus = 'MessageBus',
 }
 
 export enum Language {
