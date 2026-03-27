@@ -12,7 +12,7 @@ npx polygrapher
 
 That's it. Your browser opens with an interactive map of your codebase.
 
-Works with: **Go** (Gin, Chi, gRPC) | **TypeScript/JavaScript** (Next.js, React) | **Dart/Flutter** (BLoC, Riverpod, GetX, Dio) | **Monorepos**
+Works with: **Go** (Gin, Chi, Echo, Fiber, gRPC) | **TypeScript/JavaScript** (Next.js, NestJS, React, Express) | **Dart/Flutter** (BLoC, Riverpod, GetX, Dio) | **Monorepos**
 
 ## Features
 
@@ -41,10 +41,13 @@ Works with: **Go** (Gin, Chi, gRPC) | **TypeScript/JavaScript** (Next.js, React)
 | Type | Examples |
 |------|---------|
 | Functions | `func`, method declarations |
-| HTTP Handlers | Gin (`.GET`, `.POST`, `.Group`), Chi, `http.HandleFunc` |
-| gRPC Services | Methods with `context.Context` + protobuf request/response |
+| HTTP Handlers | Gin (`.GET`, `.POST`, `.Group`), Chi, Echo, Fiber, Beego, `http.HandleFunc` |
+| gRPC Services | Methods with `context.Context` + protobuf request/response, Kratos |
+| Workers | Kafka consumers, Asynq task processors (detected by signature) |
+| Services | Auto-detected from `cmd/*/main.go` (standard Go project layout) |
 | Structs | Single and grouped `type (...) struct` declarations |
-| Routes | Full path resolution including Gin router groups |
+| Entities | GORM (`gorm.Model`) and Ent (`ent.Schema`) models |
+| Routes | Full path resolution including Gin/Echo router groups |
 | Call Graph | Function-to-function calls with same-file preference |
 
 ### TypeScript / JavaScript / React
@@ -54,7 +57,11 @@ Works with: **Go** (Gin, Chi, gRPC) | **TypeScript/JavaScript** (Next.js, React)
 | Components | `export default function Page()`, `export const Card = () => <div>`, class components |
 | Hooks | Custom hooks (`useBooking`, `useAuth`, `useDebounce`) |
 | Handlers | Next.js API routes (`export function GET/POST/PUT/DELETE`) |
-| Routes | App Router (`app/**/page.tsx`, `app/**/route.ts`), Pages Router (`pages/**`) |
+| Services | NestJS `@Injectable()` classes |
+| Modules | NestJS `@Module()` with imports/providers/controllers wiring |
+| Guards | NestJS `@Injectable() implements CanActivate` |
+| Interceptors | NestJS `@Injectable() implements NestInterceptor` |
+| Routes | App Router, Pages Router, NestJS `@Controller()` decorators, React Router, Express |
 | API Calls | `fetch('/api/...')`, `axios.get(...)` with method + path extraction |
 | Imports | ESM `import`, CJS `require()`, dynamic `import()` — with `@/` alias support |
 | Dynamic Imports | `next/dynamic`, `React.lazy` — resolved to target component |
@@ -64,6 +71,18 @@ Works with: **Go** (Gin, Chi, gRPC) | **TypeScript/JavaScript** (Next.js, React)
 - Pages Router: `pages/api/**` and `pages/**` with dynamic routes
 - Route groups `(group)` automatically stripped from paths
 - `src/app/` and monorepo `apps/*/src/app/` paths handled automatically
+
+**NestJS support:**
+- `@Controller()` with `@Get()`, `@Post()`, `@Put()`, `@Delete()`, `@Patch()` route extraction
+- `@Module()` detection with provider/controller/import relationships
+- `@Injectable()` guards (`CanActivate`) and interceptors (`NestInterceptor`)
+- `@MessagePattern()` and `@EventPattern()` for microservice handlers
+- `@SubscribeMessage()` for WebSocket gateways
+- Controller route prefix combined with method-level paths
+
+**React Router / Express support:**
+- React Router v6/v7 route definitions (`createBrowserRouter`, `<Route>`)
+- Express `app.get()`, `app.post()`, `router.use()` route extraction
 
 ### Dart / Flutter
 
@@ -124,7 +143,7 @@ Polygrapher generates three files in a `polygrapher/` subfolder within the targe
 The viewer opens automatically at `http://127.0.0.1:3030` and includes:
 
 - **Search** — find functions, handlers, components, hooks, files, or routes by name
-- **Type filters** — toggle visibility by type (function, handler, service, gRPC, route, component, hook, struct, worker, bloc, model)
+- **Type filters** — toggle visibility by type (function, handler, service, gRPC, route, component, hook, struct, worker, bloc, model, module, guard, interceptor)
 - **Three views:**
   - **Graph** — visual node graph with force-directed layout
   - **List** — sortable table with columns for In, Out, Total connections, and Heat indicator
@@ -135,7 +154,7 @@ The viewer opens automatically at `http://127.0.0.1:3030` and includes:
   - File path + line number (clickable to VS Code)
   - Incoming and outgoing connections
 - **Flow view features:**
-  - Entry point dropdown grouped by: Routes, Handlers, gRPC, Services, Components, Functions
+  - Searchable entry point picker with type-ahead filtering (grouped by: Routes, Services, Handlers, gRPC, Components, Functions)
   - Adjustable depth limit (3-20) with real-time slider
   - Circular reference detection with `[circular]` badges
   - Graph syncs to show only traced nodes with clean layout
@@ -163,8 +182,12 @@ The viewer opens automatically at `http://127.0.0.1:3030` and includes:
 | hook | light blue |
 | struct | yellow |
 | worker | lavender |
+| entity | lavender |
 | bloc | purple |
 | model | yellow |
+| module | lavender |
+| guard | orange |
+| interceptor | lavender |
 
 ## Tech Stack Detection
 
@@ -206,7 +229,7 @@ Tech stack info appears in the `system-map.md` output as a Dependencies table wi
     "repo": "my-project",
     "languages": ["go", "typescript"],
     "generatedAt": "2026-03-26T10:00:00.000Z",
-    "polygrapher": "0.3.0"
+    "polygrapher": "0.5.0"
   },
   "nodes": [
     {
@@ -233,11 +256,11 @@ Tech stack info appears in the `system-map.md` output as a Dependencies table wi
 }
 ```
 
-**Node types:** `function`, `handler`, `component`, `hook`, `service`, `grpc`, `route`, `struct`, `worker`, `entity`, `bloc`, `model`
+**Node types:** `function`, `handler`, `component`, `hook`, `service`, `grpc`, `route`, `struct`, `worker`, `entity`, `bloc`, `model`, `module`, `guard`, `interceptor`
 
 **Edge types:** `calls`, `imports`, `routes-to`
 
-**Protocols:** `REST`, `gRPC`, `internal`
+**Protocols:** `REST`, `gRPC`, `internal`, `WebSocket`, `MessageBus`
 
 ## CI Integration
 
@@ -284,6 +307,12 @@ jobs:
 - [x] Dart / Flutter extractor (BLoC, Riverpod, GetX, Widgets, Dio, Retrofit, Freezed, GoRouter, AutoRoute)
 - [x] Dart/Flutter production features (GetIt DI, Floor/Drift, MobX, architecture detection, constructor deps)
 - [x] Cross-language matching with confidence scoring (exact/partial/inferred)
+- [x] NestJS support (modules, guards, interceptors, microservices, WebSocket gateways)
+- [x] Go service detection from `cmd/*/main.go` (standard Go microservice layout)
+- [x] Go worker detection (Kafka consumers, Asynq workers)
+- [x] Go ORM entity detection (GORM, Ent)
+- [x] React Router v6/v7 and Express route extraction
+- [x] Searchable flow entry point picker
 - [ ] Multi-repo support (GitHub org connector)
 - [ ] AI-powered cross-repo code review
 
