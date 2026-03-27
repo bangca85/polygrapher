@@ -134,6 +134,10 @@ export class GoExtractor implements LanguageExtractor {
       });
     }
 
+    // Detect Go microservice boundaries from cmd/*/main.go pattern
+    // Each cmd/ subdirectory represents a distinct deployable service
+    this.extractServices(allNodes, resolvedEdges, files);
+
     return { nodes: allNodes, edges: resolvedEdges, errors };
   }
 
@@ -144,6 +148,56 @@ export class GoExtractor implements LanguageExtractor {
       .filter(n => n.file === file && n.line <= line)
       .sort((a, b) => b.line - a.line); // closest preceding function
     return candidates[0] ?? null;
+  }
+
+  /**
+   * Detect Go microservice boundaries from cmd/ directory layout.
+   * Standard Go project layout: each cmd/<name>/main.go = one deployable service.
+   * Creates a Service node per cmd/ subdirectory and links it to the main() function inside.
+   */
+  private extractServices(nodes: GraphNode[], edges: GraphEdge[], files: string[]): void {
+    // Group files by cmd/<service-name>/ prefix
+    const serviceMap = new Map<string, string[]>();
+    for (const file of files) {
+      const rel = path.relative(this.rootPath, file);
+      const match = rel.match(/^cmd\/([^/]+)\//);
+      if (match) {
+        const serviceName = match[1];
+        const existing = serviceMap.get(serviceName) ?? [];
+        existing.push(rel);
+        serviceMap.set(serviceName, existing);
+      }
+    }
+
+    for (const [serviceName, serviceFiles] of serviceMap) {
+      const mainFile = serviceFiles.find(f => f.endsWith('/main.go'));
+      if (!mainFile) continue; // Only create service node if main.go exists
+
+      const line = 1;
+      const id = generateNodeId(mainFile, `service:${serviceName}`, line);
+
+      nodes.push({
+        id,
+        name: serviceName,
+        type: NodeType.Service,
+        language: Language.Go,
+        file: mainFile,
+        line,
+        signature: `service ${serviceName}`,
+        repo: this.repoName,
+      });
+
+      // Link service → its main() function
+      const mainFunc = nodes.find(n => n.name === 'main' && n.file === mainFile);
+      if (mainFunc) {
+        edges.push({
+          source: id,
+          target: mainFunc.id,
+          type: EdgeType.Calls,
+          protocol: Protocol.Internal,
+        });
+      }
+    }
   }
 
   private extractFromTree(
@@ -574,19 +628,15 @@ export class GoExtractor implements LanguageExtractor {
     if (paramText.includes('ConsumerHeader') || paramText.includes('message.Consumer')) {
       return true;
     }
-    
+
     // Asynq worker signature: ProcessTask(context.Context, *asynq.Task) error
-    // Sometimes context is implied or imported differently, just looking for *asynq.Task is safest
     if (paramText.includes('asynq.Task')) {
       return true;
     }
 
-    // File-based: methods in consumer/ directory or worker_ files
-    if (file.includes('/consumer/') || file.includes('worker_')) {
-      // Must have context.Context param to be a worker handler (not just a helper)
-      if (paramText.includes('context.Context') && paramText.includes('[]byte')) {
-        return true;
-      }
+    // Kafka consumer patterns: confluent-kafka-go, sarama, segmentio/kafka-go
+    if (paramText.includes('kafka.Message') || paramText.includes('kafka.Event') || paramText.includes('sarama.Consumer')) {
+      return true;
     }
 
     return false;

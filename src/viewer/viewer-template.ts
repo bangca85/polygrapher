@@ -344,7 +344,10 @@ export function generateViewerHtml(
     display: block;
     margin-bottom: 6px;
   }
-  .flow-entry-select {
+  .flow-entry-search-wrap {
+    position: relative;
+  }
+  .flow-entry-search {
     width: 100%;
     padding: 6px 10px;
     background: #0d1117;
@@ -355,7 +358,44 @@ export function generateViewerHtml(
     font-size: 13px;
     outline: none;
   }
-  .flow-entry-select:focus { border-color: #58a6ff; }
+  .flow-entry-search:focus { border-color: #58a6ff; }
+  .flow-entry-search::placeholder { color: #484f58; }
+  .flow-entry-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 320px;
+    overflow-y: auto;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    z-index: 100;
+    display: none;
+  }
+  .flow-entry-list.open { display: block; }
+  .flow-entry-group {
+    padding: 4px 10px 2px;
+    font-size: 10px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: #0d1117;
+    position: sticky;
+    top: 0;
+  }
+  .flow-entry-item {
+    padding: 5px 10px;
+    font-size: 13px;
+    color: #c9d1d9;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .flow-entry-item:hover, .flow-entry-item.selected { background: #1f2937; }
+  .flow-entry-item .ep-type { color: #8b949e; font-size: 11px; margin-left: 6px; }
   .flow-depth-controls {
     display: flex;
     align-items: center;
@@ -722,6 +762,9 @@ export function generateViewerHtml(
         'entity':    { color: '#d2a8ff', label: 'entity' },
         'bloc':      { color: '#bc8cff', label: 'bloc' },
         'model':     { color: '#e3b341', label: 'model' },
+        'module':    { color: '#d2a8ff', label: 'module' },
+        'guard':     { color: '#f0883e', label: 'guard' },
+        'interceptor': { color: '#d2a8ff', label: 'interceptor' },
       };
       const typesInData = new Set(systemMap.nodes.map(n => n.type));
       // routes-to edges create virtual route nodes
@@ -823,13 +866,32 @@ const nodeIds = new Set(GRAPH_DATA.nodes.map(n => n.id));
 // Create virtual route nodes from routes-to edges (which link function -> handler)
 const routeEdges = GRAPH_DATA.edges.filter(e => e.type === 'routes-to');
 const routeNodes = new Map();
+// Detect monorepo: check if nodes come from multiple top-level directories
+const topDirs = new Set();
+GRAPH_DATA.nodes.forEach(n => {
+  const firstDir = (n.file || '').split('/')[0];
+  if (firstDir && firstDir !== n.file) topDirs.add(firstDir);
+});
+const isMonorepo = topDirs.size > 1;
+
 routeEdges.forEach(e => {
   const meta = e.metadata || {};
-  const routeId = 'route-' + (meta.method || '') + '-' + encodeURIComponent(meta.path || '');
+
+  // For monorepo: prefix route with sub-project name from source node's file path
+  let routePrefix = '';
+  if (isMonorepo) {
+    const srcNode = GRAPH_DATA.nodes.find(n => n.id === e.source);
+    if (srcNode && srcNode.file) {
+      routePrefix = srcNode.file.split('/')[0];
+    }
+  }
+
+  const fullPath = routePrefix ? routePrefix + ':' + (meta.path || '/') : (meta.path || '/?');
+  const routeId = 'route-' + (meta.method || '') + '-' + encodeURIComponent(fullPath);
   if (!routeNodes.has(routeId)) {
     routeNodes.set(routeId, {
       id: routeId,
-      label: meta.method ? meta.method + ' ' + (meta.path || '/?') : (meta.path || '/?'),
+      label: meta.method ? meta.method + ' ' + fullPath : fullPath,
       type: 'route',
       nodeColor: NODE_COLORS['route'],
     });
@@ -2140,14 +2202,12 @@ document.getElementById('filters').addEventListener('click', (e) => {
 
 function applyFilters() {
   updateVisibilityStates();
-  // If flow view is active with a traced path, re-apply flow highlight to respect new filters
-  if (flowActive && cy) {
-    var tracedNodes = cy.nodes('.highlighted');
-    if (tracedNodes.length > 0) {
-      var ids = [];
-      tracedNodes.forEach(function(n) { ids.push(n.id()); });
-      highlightFlowPath(ids);
-    }
+  // If flow view is active with a traced entry point, rebuild trace from source of truth
+  // (cannot rely on .highlighted class — it's not applied when types are all filtered off)
+  if (flowActive && flowEntryId && cy) {
+    var result = buildCallTree(flowEntryId, flowMaxDepth);
+    var ids = result.tree.filter(function(t) { return !t.truncated; }).map(function(t) { return t.id; });
+    highlightFlowPath(ids);
   }
 }
 
@@ -2982,42 +3042,32 @@ function initFlowPanel() {
   flowActive = true;
   var eps = getEntryPoints();
 
-  var selectHtml = '<option value="">-- Select entry point --</option>';
-  if (eps.routes.length > 0) {
-    selectHtml += '<optgroup label="Routes">';
-    eps.routes.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
-    selectHtml += '</optgroup>';
-  }
-  if (eps.handlers.length > 0) {
-    selectHtml += '<optgroup label="Handlers">';
-    eps.handlers.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
-    selectHtml += '</optgroup>';
-  }
-  if (eps.grpcs.length > 0) {
-    selectHtml += '<optgroup label="gRPC Services">';
-    eps.grpcs.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
-    selectHtml += '</optgroup>';
-  }
-  if (eps.services.length > 0) {
-    selectHtml += '<optgroup label="Services">';
-    eps.services.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
-    selectHtml += '</optgroup>';
-  }
-  if (eps.components.length > 0) {
-    selectHtml += '<optgroup label="Components">';
-    eps.components.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
-    selectHtml += '</optgroup>';
-  }
-  if (eps.functions.length > 0) {
-    selectHtml += '<optgroup label="Functions">';
-    eps.functions.forEach(function(ep) { selectHtml += '<option value="' + esc(ep.id) + '">' + esc(ep.name) + '</option>'; });
-    selectHtml += '</optgroup>';
-  }
+  // Build flat entry list for searchable dropdown
+  var allEntries = [];
+  var groupOrder = [
+    { key: 'routes', label: 'Routes' },
+    { key: 'services', label: 'Services' },
+    { key: 'handlers', label: 'Handlers' },
+    { key: 'grpcs', label: 'gRPC Services' },
+    { key: 'components', label: 'Components' },
+    { key: 'functions', label: 'Functions' },
+  ];
+  groupOrder.forEach(function(g) {
+    var items = eps[g.key];
+    if (items && items.length > 0) {
+      items.forEach(function(ep) {
+        allEntries.push({ id: ep.id, name: ep.name, type: ep.type, group: g.label });
+      });
+    }
+  });
 
   flowPanel.innerHTML = ''
     + '<div class="flow-header">'
     + '  <label>Entry Point</label>'
-    + '  <select class="flow-entry-select" id="flowEntrySelect">' + selectHtml + '</select>'
+    + '  <div class="flow-entry-search-wrap">'
+    + '    <input type="text" class="flow-entry-search" id="flowEntrySearch" placeholder="Search entry points..." autocomplete="off">'
+    + '    <div class="flow-entry-list" id="flowEntryList"></div>'
+    + '  </div>'
     + '</div>'
     + '<div class="flow-depth-controls">'
     + '  <span>Depth:</span>'
@@ -3027,12 +3077,49 @@ function initFlowPanel() {
     + '<div class="flow-tree"><div class="flow-empty">Select an entry point to trace the call flow</div></div>'
     + '<div class="flow-footer"></div>';
 
-  // Entry point select
-  var select = document.getElementById('flowEntrySelect');
-  select.addEventListener('change', function() {
-    var val = select.value;
-    if (val) renderFlowTree(val);
-    else renderFlowTree(null);
+  // Searchable entry point picker
+  var epSearch = document.getElementById('flowEntrySearch');
+  var epList = document.getElementById('flowEntryList');
+
+  function renderEntryList(query) {
+    var q = (query || '').toLowerCase();
+    var filtered = q ? allEntries.filter(function(ep) { return ep.name.toLowerCase().includes(q); }) : allEntries;
+    var html = '';
+    var lastGroup = '';
+    filtered.forEach(function(ep) {
+      if (ep.group !== lastGroup) {
+        lastGroup = ep.group;
+        html += '<div class="flow-entry-group">' + esc(ep.group) + '</div>';
+      }
+      html += '<div class="flow-entry-item" data-id="' + esc(ep.id) + '">' + esc(ep.name) + '<span class="ep-type">' + esc(ep.type) + '</span></div>';
+    });
+    if (!html) html = '<div class="flow-entry-item" style="color:#484f58">No matches</div>';
+    epList.innerHTML = html;
+  }
+
+  epSearch.addEventListener('focus', function() {
+    renderEntryList(epSearch.value);
+    epList.classList.add('open');
+  });
+
+  epSearch.addEventListener('input', function() {
+    renderEntryList(epSearch.value);
+    epList.classList.add('open');
+  });
+
+  epList.addEventListener('click', function(ev) {
+    var item = ev.target.closest('.flow-entry-item');
+    if (!item || !item.dataset.id) return;
+    epSearch.value = allEntries.find(function(e) { return e.id === item.dataset.id; })?.name || '';
+    epList.classList.remove('open');
+    renderFlowTree(item.dataset.id);
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('click', function(ev) {
+    if (!ev.target.closest('.flow-entry-search-wrap')) {
+      epList.classList.remove('open');
+    }
   });
 
   // Depth slider
@@ -3046,7 +3133,8 @@ function initFlowPanel() {
 
   // If already had an entry, restore it
   if (flowEntryId) {
-    select.value = flowEntryId;
+    var restored = allEntries.find(function(e) { return e.id === flowEntryId; });
+    if (restored) epSearch.value = restored.name;
     renderFlowTree(flowEntryId);
   }
 }

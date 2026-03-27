@@ -322,6 +322,84 @@ describe('GoExtractor', () => {
     });
   });
 
+  describe('microservice-cmd (cmd/ service detection)', () => {
+    const CMD_FIXTURE = path.join(FIXTURES, 'microservice-cmd');
+
+    it('creates Service nodes for each cmd/ subdirectory with main.go', async () => {
+      const files = [
+        path.join(CMD_FIXTURE, 'cmd/order-worker/main.go'),
+        path.join(CMD_FIXTURE, 'cmd/api-service/main.go'),
+        path.join(CMD_FIXTURE, 'internal/handler/orders.go'),
+      ];
+      const result = await extractor.parse(files, CMD_FIXTURE);
+
+      const services = result.nodes.filter(n => n.type === 'service');
+      const serviceNames = services.map(n => n.name).sort();
+
+      expect(services).toHaveLength(2);
+      expect(serviceNames).toEqual(['api-service', 'order-worker']);
+    });
+
+    it('service nodes have correct file and signature', async () => {
+      const files = [
+        path.join(CMD_FIXTURE, 'cmd/order-worker/main.go'),
+        path.join(CMD_FIXTURE, 'cmd/api-service/main.go'),
+        path.join(CMD_FIXTURE, 'internal/handler/orders.go'),
+      ];
+      const result = await extractor.parse(files, CMD_FIXTURE);
+
+      const orderWorker = result.nodes.find(n => n.type === 'service' && n.name === 'order-worker');
+      expect(orderWorker).toBeDefined();
+      expect(orderWorker!.file).toBe('cmd/order-worker/main.go');
+      expect(orderWorker!.signature).toBe('service order-worker');
+    });
+
+    it('service node links to its main() function via Calls edge', async () => {
+      const files = [
+        path.join(CMD_FIXTURE, 'cmd/order-worker/main.go'),
+        path.join(CMD_FIXTURE, 'cmd/api-service/main.go'),
+        path.join(CMD_FIXTURE, 'internal/handler/orders.go'),
+      ];
+      const result = await extractor.parse(files, CMD_FIXTURE);
+
+      const serviceNode = result.nodes.find(n => n.type === 'service' && n.name === 'order-worker');
+      const mainFunc = result.nodes.find(n => n.name === 'main' && n.file === 'cmd/order-worker/main.go');
+      expect(serviceNode).toBeDefined();
+      expect(mainFunc).toBeDefined();
+
+      const edge = result.edges.find(
+        e => e.source === serviceNode!.id && e.target === mainFunc!.id && e.type === 'calls'
+      );
+      expect(edge).toBeDefined();
+      expect(edge!.protocol).toBe('internal');
+    });
+
+    it('does not create service nodes for non-cmd directories', async () => {
+      const files = [
+        path.join(CMD_FIXTURE, 'internal/handler/orders.go'),
+      ];
+      const result = await extractor.parse(files, CMD_FIXTURE);
+
+      const services = result.nodes.filter(n => n.type === 'service');
+      expect(services).toHaveLength(0);
+    });
+
+    it('all edges reference valid node IDs', async () => {
+      const files = [
+        path.join(CMD_FIXTURE, 'cmd/order-worker/main.go'),
+        path.join(CMD_FIXTURE, 'cmd/api-service/main.go'),
+        path.join(CMD_FIXTURE, 'internal/handler/orders.go'),
+      ];
+      const result = await extractor.parse(files, CMD_FIXTURE);
+
+      const nodeIds = new Set(result.nodes.map(n => n.id));
+      for (const edge of result.edges) {
+        expect(nodeIds.has(edge.source), `source ${edge.source} missing`).toBe(true);
+        expect(nodeIds.has(edge.target), `target ${edge.target} missing`).toBe(true);
+      }
+    });
+  });
+
   describe('detect', () => {
     it('returns true for directory with go.mod', async () => {
       expect(await extractor.detect(path.join(FIXTURES, 'simple-api'))).toBe(true);
