@@ -9,6 +9,7 @@ import { buildGraph } from './graph/graph-builder.js';
 import { exportJson } from './exporters/json-exporter.js';
 import { exportMarkdown } from './exporters/markdown-exporter.js';
 import { exportHtml } from './exporters/html-exporter.js';
+import { exportAiContext } from './exporters/ai-context-exporter.js';
 import { startServer } from './viewer/server.js';
 import { Language } from './types/graph.types.js';
 import type { MapMeta } from './types/graph.types.js';
@@ -101,10 +102,15 @@ program.action(async (targetPath: string, options: { exportOnly: boolean; port: 
     const jsonPath = exportJson(systemMap, outputDir);
     const mdPath = exportMarkdown(systemMap, outputDir, resolvedPath);
     const htmlPath = exportHtml(systemMap, outputDir, resolvedPath);
+    const aiResult = exportAiContext(systemMap, outputDir, resolvedPath);
     printInfo(`System map generated:`);
     printInfo(`  ${jsonPath}`);
     printInfo(`  ${mdPath}`);
     printInfo(`  ${htmlPath}`);
+    printInfo(`  AI context: ${aiResult.paths.length} files (index.md + ${aiResult.paths.length - 1} modules)`);
+    for (const warning of aiResult.warnings) {
+      printWarning(`Token budget: ${warning}`);
+    }
 
     if (options.exportOnly) {
       // --export-only: files written, no viewer, exit cleanly

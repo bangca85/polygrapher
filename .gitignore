@@ -4,6 +4,9 @@ dist/
 !grammars/*.wasm
 .DS_Store
 
+# Generated output in test fixtures
+test-fixtures/**/polygrapher/
+
 # Agent & docs
 # _bmad*/
 # .agent/

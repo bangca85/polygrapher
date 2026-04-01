@@ -1,6 +1,6 @@
 {
   "name": "polygrapher",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Zero-config CLI that generates instant, interactive codebase maps",
   "type": "module",
   "bin": {
@@ -48,5 +48,17 @@
     "dist",
     "grammars",
     "README.md"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bangca85/polygrapher.git"
+  },
+  "homepage": "https://github.com/bangca85/polygrapher#readme",
+  "bugs": {
+    "url": "https://github.com/bangca85/polygrapher/issues"
+  }
 }
